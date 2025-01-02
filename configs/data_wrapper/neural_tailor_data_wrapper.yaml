@@ -1,0 +1,6 @@
+_target_: data.data_wrappers.garment_image_data_wrapper.GarmentImageDataWrapper
+defaults:
+  - data_split: full_training_token
+  - dataset: neural_tailor_dataset
+
+collate_fn: data.data_wrappers.collate_fns.collate_fn_regression_dresscode

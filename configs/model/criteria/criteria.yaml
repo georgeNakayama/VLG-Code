@@ -1,0 +1,37 @@
+defaults:
+  - loss/loss_components@composed_loss.loss_components: base_l_components
+  - metric/quality_components@composed_loss.quality_components: base_q_components
+  - /data_wrapper/dataset/standardize@composed_loss.standardize_config: sewfactory_stats
+  - /data_wrapper/dataset/panel_info@composed_loss.panel_config: garment_panel_info
+  - overide loss@composed_loss.loss_components.shape: mse_loss
+  - overide loss@composed_loss.loss_components.loop: loop_loss
+  - overide loss@composed_loss.loss_components.rotation: mse_loss
+  - overide loss@composed_loss.loss_components.translation: mse_loss
+  - overide metric@composed_loss.quality_components.shape: panel_vertices_l2
+  - overide metric@composed_loss.quality_components.discrete: panel_accuracy
+  - overide metric@composed_loss.quality_components.rotation: rotation_universal_l2
+  - overide metric@composed_loss.quality_components.translation: translation_universal_l2
+  - overide metric@composed_loss.quality_components.panel_chamfer: panel_chamfer
+
+
+_target_: models.pcd2garment.garment_pcd_hydra.SetCriterionWithOutMatcher
+stitches: ce 
+lepoch: 0
+composed_loss:
+  _target_: metrics.composed_loss_hydra.ComposedPatternLoss
+  loss_components:  
+    shape: 
+      weight: 1.
+    loop:
+      weight: 1.
+    rotation:
+      weight: 1.
+    translation:
+      weight: 1.
+    kl_weight: 0.005
+  panel_origin_invariant_loss: False
+  panel_order_inariant_loss: False
+  epoch_with_order_matching: 0
+  epoch_with_stitches: 40
+  order_by: shape_translation   # placement, translation, stitches, shape_translation
+  with_quality_eval: true

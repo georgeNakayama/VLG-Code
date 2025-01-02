@@ -1,0 +1,18 @@
+# Training configuration for Pattern Shape prediction model 
+# (part I of NeuralTailor)
+
+# 0.5 * stitch cls loss (focal loss) + 0.005 * stitch ce loss + 5 * panel loss
+defaults: 
+  - train_garment_llava_regression
+  - _self_
+
+model:
+  pos_embed: true
+  num_freq: 0
+  pos_embed_type: sinusoidal
+  verts_bounds: [-4, -4, 4, 4]
+  transf_bounds: [-4, -4, -4, -1, -1, -1, -1, 4, 4, 4, 1, 1, 1, 1]
+  denormalize_for_loss: false
+  num_regression_layers: 2
+  discretize: True 
+  bin_num: 256

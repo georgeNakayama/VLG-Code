@@ -1,0 +1,17 @@
+outputs
+artifacts
+__pycache__
+*.pyc
+wandb
+*.png
+build/
+*.egg-info
+*.so
+*.npy
+pre_trained_symb_links
+*.pkl
+*.npz
+scripts/
+*.out 
+*.ou 
+*.txt

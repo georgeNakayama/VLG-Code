@@ -1,0 +1,5 @@
+_target_: trainers.schedulers.warmup.WarmupCosineAnnealingLR
+multiplier: 1
+warmup_steps: 100
+eta_min: 0
+last_epoch: -1

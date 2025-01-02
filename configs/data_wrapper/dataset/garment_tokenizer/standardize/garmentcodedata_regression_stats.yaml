@@ -1,0 +1,6 @@
+defaults:
+  - outlines: sewfactory_token 
+  - rotations: sewfactory_regression
+  - stitch_tags: sewfactory 
+  - translations: garmentcodedata_regression
+  - vertices: garmentcodedata_regression

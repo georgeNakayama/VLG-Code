@@ -1,0 +1,10 @@
+defaults:
+  - standardize: sewfactory_stats_token
+
+_target_: data.garment_tokenizers.default_garment_tokenizer.GarmentTokenizer
+bin_size: 256
+encode_stitches_as_tags: True
+sf_only: False
+include_template_name: False
+random_tag: True
+num_tags: 30

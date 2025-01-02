@@ -1,0 +1,12 @@
+defaults:
+  - standardize: sewfactory_stats_token
+
+_target_: data.datasets.dataset_garment_as_token.GarmentTokenDataset
+root_dir: /miele/george/sewfactory
+base_offset: 50257
+text_encoder: gpt2
+bin_size: 256
+
+
+panel_classification: ./assets/data_configs/panel_classes_condenced.json 
+filter_params: ./assets/data_configs/param_filter.json

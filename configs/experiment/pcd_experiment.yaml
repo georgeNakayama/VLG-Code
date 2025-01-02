@@ -1,0 +1,7 @@
+defaults:
+  - wandb_info: wandb
+project_name: PCD2Garment
+run_name: ???
+run_id: null
+local_dir: null
+is_training: True

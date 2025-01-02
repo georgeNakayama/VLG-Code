@@ -1,0 +1,215 @@
+import argparse
+import os
+import shutil
+import sys
+import time
+from functools import partial
+from dataclasses import dataclass, field, asdict
+import logging 
+log = logging.getLogger(__name__)
+import hydra
+from typing import Literal, List
+import deepspeed
+import numpy as np
+import torch
+import tqdm
+import transformers
+from typing import Optional
+
+from models.aipparel_llava_next import AIpparelLlavaNextForConditionalGeneration
+
+@dataclass
+class MainConfig:
+    version: str
+    precision: Literal["bf16", "fp16"] = "bf16"
+    eval_only: bool = False
+    gen_only: bool = False
+    pre_trained: Optional[str] = None
+    from_start: bool = False
+
+@hydra.main(version_base=None, config_path='./configs', config_name='config')
+def main(cfg: MainConfig):
+    log.info(f"Working directory : {os.getcwd()}")
+    output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    log.info(f"Output directory : {output_dir}")
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+    master_process = (ddp_rank == 0)
+    
+    garment_tokenizer = hydra.utils.instantiate(
+        cfg.garment_tokenizer,
+    )
+    
+    dataset_train = hydra.utils.instantiate(
+        cfg.dataset,
+        split="train"
+    )
+    
+    if ddp_rank == 0:
+        log.info(f"--> Training Set Length = {len(dataset_train)}")
+
+    dataset_val = hydra.utils.instantiate(
+        cfg.dataset,
+        split="val"
+    )
+    if ddp_rank == 0:
+        log.info(f"--> Validation Set Length = {len(dataset_val)}")
+    
+    # Create model
+    processor = transformers.AutoProcessor.from_pretrained(
+        cfg.version,
+    )
+    
+    processor.tokenizer.pad_token = processor.tokenizer.unk_token
+    all_new_tokens = garment_tokenizer.get_all_token_names()
+    num_added_tokens = processor.tokenizer.add_tokens(all_new_tokens, special_tokens=True)
+    if master_process:
+        log.info(f"Added {num_added_tokens} tokens to the tokenizer.")
+    token_name2_idx_dict = {}
+    for token in all_new_tokens:
+        token_idx = processor.tokenizer(token, add_special_tokens=False).input_ids[0]
+        token_name2_idx_dict[token] = token_idx
+    image_token_idx = processor.tokenizer(processor.image_token, add_special_tokens=False).input_ids[0]
+        
+    if master_process:
+        log.info(f"Token name to index dictionary: {token_name2_idx_dict}")
+    garment_tokenizer.set_token_indices(token_name2_idx_dict)
+
+    torch_dtype = torch.float32
+    if cfg.precision == "bf16":
+        torch_dtype = torch.bfloat16
+    elif cfg.precision == "fp16":
+        torch_dtype = torch.half
+
+    model = AIpparelLlavaNextForConditionalGeneration.from_pretrained(
+        cfg.version
+    )
+    
+    model.config.transf_token = PanelEdgeTypeV3.MOVE.value
+    model.config.transf_token_index = garment_tokenizer.panel_edge_type_indices.move_idx
+
+    model.config.line_token = PanelEdgeTypeV3.LINE.value
+    model.config.line_token_index = garment_tokenizer.panel_edge_type_indices.line_idx
+
+    model.config.quadratic_token = PanelEdgeTypeV3.CURVE.value
+    model.config.quadratic_token_index = garment_tokenizer.panel_edge_type_indices.curve_idx
+
+    model.config.cubic_token = PanelEdgeTypeV3.CUBIC.value
+    model.config.cubic_token_index = garment_tokenizer.panel_edge_type_indices.cubic_idx
+
+    model.config.arc_token = PanelEdgeTypeV3.ARC.value
+    model.config.arc_token_index = garment_tokenizer.panel_edge_type_indices.arc_idx
+
+    model.config.cline_token = PanelEdgeTypeV3.CLOSURE_LINE.value
+    model.config.cline_token_index = garment_tokenizer.panel_edge_type_indices.closure_line_idx
+
+    model.config.cquadratic_token = PanelEdgeTypeV3.CLOSURE_CURVE.value
+    model.config.cquadratic_token_index = garment_tokenizer.panel_edge_type_indices.closure_curve_idx
+
+    model.config.ccubic_token = PanelEdgeTypeV3.CLOSURE_CUBIC.value
+    model.config.ccubic_token_index = garment_tokenizer.panel_edge_type_indices.closure_cubic_idx
+
+    model.config.carc_token = PanelEdgeTypeV3.CLOSURE_ARC.value
+    model.config.carc_token_index = garment_tokenizer.panel_edge_type_indices.closure_arc_idx
+
+    model.enable_input_require_grads()
+    model.gradient_checkpointing_enable()
+
+    vision_tower = model.vision_tower
+    vision_tower.to(dtype=torch_dtype, device=ddp_local_rank)
+
+    for p in vision_tower.parameters():
+        p.requires_grad = False
+    for p in model.multi_modal_projector.parameters():
+        p.requires_grad = False
+
+    model.resize_token_embeddings(len(processor.tokenizer))
+
+    for name, module in model.named_parameters():
+        print(name, module.shape, module.requires_grad)
+        
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total parameters: {total_params}, Trainable parameters: {trainable_params}")
+    
+    if cfg.eval_only:
+        trainer.eval_step(trainer.start_epoch * trainer.steps_per_epoch)
+        trainer.generation_step(trainer.start_epoch * trainer.steps_per_epoch)
+    elif cfg.gen_only:
+        trainer.generation_step(trainer.start_epoch)
+    else:
+        optimizer_config = {
+            "type": "AdamW",
+            "params": {
+                "lr": cfg.optimizer.lr,
+                "weight_decay": 0.0,
+                "betas": (cfg.optimizer.beta1, cfg.optimizer.beta2)
+            }
+        }
+        scheduler_config = {
+            "type": "WarmupDecayLR",
+            "params": {
+                "total_num_steps": cfg.num_steps,
+                "warmup_min_lr": 0,
+                "warmup_max_lr": cfg.optimizer.lr,
+                "warmup_num_steps": cfg.warmup_steps,
+                "warmup_type": "linear"
+            }
+        }
+        ds_config = {
+            "train_micro_batch_size_per_gpu": cfg.batch_size,
+            "gradient_accumulation_steps": cfg.grad_accumulation_steps,
+            "fp16": {
+                "enabled": cfg.precision == "fp16",
+            },
+            "bf16": {
+                "enabled": cfg.precision == "bf16",
+            },
+            "gradient_clipping": 1.0,
+            "zero_optimization": {
+                "stage": 3,
+                "cpu_offload": true,
+                "cpu_offload_params": true,
+                "cpu_offload_use_pin_memory" : true,
+                "overlap_comm": true,
+                "contiguous_gradients": true,
+                "stage3_max_live_parameters": 1e9,
+                "stage3_max_reuse_distance": 1e9,
+                "stage3_prefetch_bucket_size": 0.94e6,
+                "stage3_param_persistence_threshold": 1e4,
+                "reduce_bucket_size": 1e6,
+                "prefetch_bucket_size": 3e6,
+                "sub_group_size": 1e14,
+                "stage3_gather_fp16_weights_on_model_save": true
+            },
+
+        }
+        ds_config["optimizer"] = optimizer_config
+        ds_config["scheduler"] = scheduler_config
+        model_engine, optimizer, train_loader, scheduler = deepspeed.initialize(
+            model=model,
+            model_parameters=model.parameters(),
+            training_data=dataset_train,
+            collate_fn=partial(
+                llava_next_collate_fn,
+                processor=processor,
+                garment_tokenizer=garment_tokenizer,
+                model_version=cfg.version
+            ),
+            config=ds_config,
+        )
+    train(
+        cfg,
+        model_engine, 
+        optimizer, 
+        train_loader, 
+        scheduler,
+        garment_tokenizer,
+        ddp_rank, 
+        ddp_world_size
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,39 @@
+# Training configuration for Pattern Shape prediction model 
+# (part I of NeuralTailor)
+
+# 0.5 * stitch cls loss (focal loss) + 0.005 * stitch ce loss + 5 * panel loss
+defaults: 
+  - data_wrapper: qva_garment_token_data_wrapper
+  - trainer: llava_garment_token_tariner
+  - system: my_system
+  - experiment: gpt2_experiment
+  - _self_
+  - override data_wrapper/dataset/garment_tokenizer: regression_garment_tokenizer
+
+model:
+  use_mm_start_end: True
+  edge_loss_weight: 0.1
+
+experiment:
+  run_name: finetune_llava_garment_token
+
+data_wrapper:
+  collate_fn: data.data_wrappers.collate_fns.collate_fn_regression
+
+model_max_length: 1024
+version: liuhaotian/llava-v1.5-7b
+precision: bf16
+eval_only: False
+gen_only: False
+lora_args: 
+  lora_r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  lora_target_modules: [q_proj,v_proj,o_proj,k_proj]
+conv_type: llava_v1
+pre_trained: null
+storage_dir: null
+model_type: garment_token_regression
+hydra:
+  run:
+    dir: /miele/george/garment/sewformer/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

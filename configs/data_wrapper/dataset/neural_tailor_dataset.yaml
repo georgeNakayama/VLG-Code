@@ -1,0 +1,7 @@
+defaults:
+  - garment_tokenizer: dresscode_garment_tokenizer
+
+_target_: data.datasets.dataset_dresscode_caption.DressCodeCaptionDataset
+root_dir: /miele/george/DressCode_data_processed/
+panel_classification: /home/w4756677/garment/garment_foundation_model/sewformer/SewFormer/assets/data_configs/neural_tailor_panel_classes_plus_one.json
+data_list_file: /home/w4756677/garment/garment_foundation_model/sewformer/SewFormer/assets/data_configs/neural_tailor_list.txt

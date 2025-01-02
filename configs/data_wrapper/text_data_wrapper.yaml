@@ -1,0 +1,4 @@
+_target_: data_wrappers.text_data_wrapper.TextDataWrapper
+batch_size: 16
+sequence_length: 1024
+root_dir: /miele/george/edu_fineweb10B/

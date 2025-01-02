@@ -1,0 +1,6 @@
+max_pattern_len: 23   # Overridden if panel_classification is specified
+max_panel_len: 14
+max_num_stitches: 28   # when training with stitches
+max_stitch_edges: 56
+panel_classification: ./assets/data_configs/panel_classes_condenced.json 
+filter_by_params: ./assets/data_configs/param_filter.json

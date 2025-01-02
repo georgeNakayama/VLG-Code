@@ -1,0 +1,9 @@
+shape: null
+loop: null
+rotation: null
+translation: null
+stitch: null 
+stitch_supervised: null
+free_class: null 
+segmentation: null
+kl_weight: 0.

@@ -1,0 +1,5 @@
+_target_: data.data_wrappers.garment_token_data_wrapper_v2.GarmentTokenDataWrapperV2
+defaults:
+  - data_split: full_training_token
+  - dataset: garment_token_dataset
+batch_size: 64

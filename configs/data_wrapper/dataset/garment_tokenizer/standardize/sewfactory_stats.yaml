@@ -1,0 +1,6 @@
+defaults:
+  - outlines: sewfactory 
+  - rotations: sewfactory 
+  - stitch_tags: sewfactory 
+  - translations: sewfactory
+  - vertices: sewfactory

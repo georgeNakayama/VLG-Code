@@ -1,0 +1,12 @@
+defaults:
+  - standardize: sewfactory_stats
+  - panel_info: garment_panel_info
+  - mesh_info: garment_mesh_info
+
+_target_: data.datasets.dataset_pcd_hydra.GarmentPCDDataset
+root_dir: /miele/george/sewfactory
+gt_caching: true
+feature_caching: true
+include_posed_objects: true
+use_front_img: true
+  
