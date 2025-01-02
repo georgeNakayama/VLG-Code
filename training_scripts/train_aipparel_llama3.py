@@ -17,7 +17,7 @@ import transformers
 from typing import Optional
 from omegaconf import OmegaConf
 
-from models.aipparel_llava_next import AIpparelLlavaNextForConditionalGeneration
+from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
 from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
 from data.collate_fns import collate_fn
 from trainers.train import train
@@ -71,7 +71,8 @@ def main(cfg: MainConfig):
         cfg.version,
     )
     
-    processor.tokenizer.pad_token = processor.tokenizer.unk_token
+    processor.tokenizer.add_tokens("<pad>", special_tokens=True)
+    processor.tokenizer.pad_token = "<pad>"
     all_new_tokens = garment_tokenizer.get_all_token_names()
     num_added_tokens = processor.tokenizer.add_tokens(all_new_tokens, special_tokens=True)
     if master_process:
@@ -92,7 +93,7 @@ def main(cfg: MainConfig):
         torch_dtype = torch.half
 
     model_dict = OmegaConf.to_container(cfg.model, resolve=True)
-    model = AIpparelLlavaNextForConditionalGeneration.from_pretrained(
+    model = AIpparelMllavaNextForConditionalGeneration.from_pretrained(
         cfg.version,
         **model_dict
     )
@@ -127,7 +128,7 @@ def main(cfg: MainConfig):
     model.enable_input_require_grads()
     model.gradient_checkpointing_enable()
 
-    vision_tower = model.vision_tower
+    vision_tower = model.vision_model
     vision_tower.to(dtype=torch_dtype, device=ddp_local_rank)
 
     for p in vision_tower.parameters():

@@ -157,10 +157,12 @@ def _fit_loop(
             
             output = model(
                 input_ids=input_dict["input_ids"],
-                labels=input_dict["labels"],
                 pixel_values=input_dict["pixel_values"],
                 attention_mask=input_dict["attention_mask"],
-                image_sizes=input_dict["image_sizes"],
+                aspect_ratio_ids=input_dict["aspect_ratio_ids"],
+                aspect_ratio_mask=input_dict["aspect_ratio_mask"],
+                cross_attention_mask=input_dict["cross_attention_mask"],
+                labels=input_dict["labels"],
                 pattern_params=input_dict["pattern_params"],
                 pattern_params_mask=input_dict["pattern_params_mask"],
                 pattern_endpoints=input_dict["pattern_endpoints"],

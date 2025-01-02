@@ -8,15 +8,15 @@ from data.garment_tokenizers.default_garment_tokenizer import GarmentTokenizer
 
 # check system prompt token seq or user prompt token seq is in the current token list
 def find_header(targets, seq):
-    n = len(targets)
+    n = targets.shape[1]
     sep_inds = []
     seq = seq[None]
-    for i in range(len(seq)-n+1):
+    for i in range(seq.shape[1]-n+1):
         if torch.all(seq[:, i:i+n] == targets, axis=-1).any():
             sep_inds.append(i)
     return sep_inds
 
-def llava_next_collate_fn(
+def collate_fn(
     batch, 
     processor: Optional[transformers.AutoProcessor]=None, 
     garment_tokenizer: Optional[GarmentTokenizer]=None, 
@@ -136,14 +136,14 @@ def construct_labels(
         image_token_id = 128256
         prompt_header_seqs = torch.tensor([[128006, 9125, 128007],[128006, 882, 128007]])
         assistant_header_seq = torch.tensor([[128006, 78191, 128007]])
-        eot_indices = (input_ids == 128009).nonzero().flatten()
         for i in range(len(input_ids)):
             dialog_tokens = input_ids[i]
             labels = dialog_tokens.clone()
             last_idx = 0
+            eot_indices = (input_ids[i] == 128009).nonzero().flatten()
             # system prompt header "<|start_header_id|>system<|end_header_id|>" has been tokenized to [128006, 9125, 128007]
             # user prompt header "<|start_header_id|>user<|end_header_id|>" has been tokenized to [128006, 882, 128007]
-            for n, idx in enumerate(eot_indices[i]):
+            for n, idx in enumerate(eot_indices):
                 current_seq = labels[last_idx:idx+1]
                 if len(find_header(prompt_header_seqs,current_seq)) > 0:
                     # found prompt header, indicating that this seq should be masked
@@ -151,7 +151,7 @@ def construct_labels(
                 else:
                     last_idx = idx+1
             #  Mask all the assistant header prompt <|start_header_id|>assistant<|end_header_id|>, which has been tokenized to [128006, 78191, 128007]
-            header_ind = find_header(assistant_header_seq,labels)
+            header_ind = find_header(assistant_header_seq,labels)[0]
             labels[header_ind: header_ind + 3] = IGNORE_INDEX
         
     label_list.append(labels)
