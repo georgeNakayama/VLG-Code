@@ -1,5 +1,0 @@
-type: percent
-split_on: pattern
-valid_per_type: 5
-test_per_type: 5
-load_from_split_file: null

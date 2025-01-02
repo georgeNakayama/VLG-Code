@@ -1,3 +1,0 @@
-defaults:
-  - /data_wrapper/dataset/standardize/rotations@standardize_config: sewfactory
-_target_: metrics.metrics_hydra.UniversalL2

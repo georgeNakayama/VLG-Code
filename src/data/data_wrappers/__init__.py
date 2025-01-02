@@ -1,1 +1,0 @@
-from .garment_token_data_wrapper_v2 import GarmentTokenDataWrapperV2

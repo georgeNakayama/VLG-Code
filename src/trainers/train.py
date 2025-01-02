@@ -1,8 +1,10 @@
 import os 
 import wandb as wb
-import OmegaConf
-import _get_fp32_state_dict_from_zero_checkpoint
-from trainers.utils import dict_to_cuda, AverageMeter, ProgressMeter, master_log, dict_to_cpu, dict_to_dtype
+from omegaconf import OmegaConf
+import torch
+from trainers.convert_zero_to_torch import _get_fp32_state_dict_from_zero_checkpoint
+from trainers.utils import dict_to_cuda, AverageMeter, ProgressMeter
+import time
 import logging
 log = logging.getLogger(__name__)
 
@@ -10,8 +12,10 @@ def _start_experiment(
     cfg,
     model,
     ddp_rank,
-    ddp_world_size
-)
+    ddp_world_size,
+    resume,
+    from_start
+):
     # resume deepspeed checkpoint
     os.environ['WANDB_DIR'] = cfg.wandb_info.wandb_dir
     os.environ['WANDB_CACHE_DIR'] = cfg.wandb_info.wandb_cache_dir
@@ -32,7 +36,7 @@ def _start_experiment(
             raise ValueError(f"Unable to find 'latest' file at {latest_path}")
 
         ds_checkpoint_dir = os.path.join(resume, tag)
-        if from_start or (os.path.isdir(ds_checkpoint_dir) and len(os.listdir(ds_checkpoint_dir)) != self.ddp_world_size + 1):
+        if from_start or (os.path.isdir(ds_checkpoint_dir) and len(os.listdir(ds_checkpoint_dir)) != ddp_world_size + 1):
             state_dict = _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, True)
             model.module.load_state_dict(state_dict, strict=False)
         else:
@@ -62,16 +66,26 @@ def train(
     scheduler, 
     garment_tokenizer,
     ddp_rank,
-    ddp_world_size):
+    ddp_world_size,
+    log_dir):
     """Fit provided model to reviosly configured dataset"""
     
-    start_step = _start_experiment(cfg, model, ddp_rank, ddp_world_size)
+    start_step = _start_experiment(
+        cfg, 
+        model, 
+        ddp_rank, 
+        ddp_world_size,
+        cfg.resume,
+        cfg.from_start)
     _fit_loop(
         model, 
         optimizer, 
         loader, 
         scheduler, 
         garment_tokenizer, 
+        ddp_rank,
+        ddp_world_size,
+        log_dir, 
         cfg.precision, 
         cfg.grad_accumulation_steps, 
         cfg.num_steps, 
@@ -87,6 +101,9 @@ def _fit_loop(
     loader, 
     scheduler, 
     garment_tokenizer,
+    ddp_rank,
+    ddp_world_size,
+    log_dir,
     precision,
     grad_accumulation_steps,
     num_steps, 
@@ -109,7 +126,7 @@ def _fit_loop(
     all_meters += [edge_losses]
     progress = ProgressMeter(
         log, 
-        ddp_local_rank, 
+        ddp_rank, 
         1,
         all_meters,
         prefix="Step:",
@@ -117,7 +134,8 @@ def _fit_loop(
     model.train()
     for step in range(start_step, num_steps):
         last_step = (step == num_steps - 1)
-        
+        if ddp_rank == 0:
+            log.info("Start Training...")
         for i in range(grad_accumulation_steps):
             end = time.time()
             try:
@@ -158,7 +176,7 @@ def _fit_loop(
             ce_loss = output.ce_loss
             losses.update(loss.mean(), B)
             ce_losses.update(ce_loss.mean(), B)
-            edge_loss = output_dict.edge_loss
+            edge_loss = output.edge_loss
             edge_losses.update(edge_loss.mean(), B)
             for k, meter in edge_type_losses.items():
                 if f"{k}_loss" in output.edge_type_losses.keys():
@@ -176,9 +194,9 @@ def _fit_loop(
         
         # logging
         if ddp_world_size > 1:
-            train_batch_time.all_reduce()
-            train_data_time.all_reduce()
-            train_losses.all_reduce()
+            batch_time.all_reduce()
+            data_time.all_reduce()
+            losses.all_reduce()
             ce_losses.all_reduce()
             for i, mode in enumerate(mode_names):
                 modewise_total_losses[i].all_reduce()
@@ -191,10 +209,10 @@ def _fit_loop(
             if ddp_rank == 0:
                 progress.display(step + 1)
                 log_dict = {
-                    "train/loss": train_losses.avg,
+                    "train/loss": losses.avg,
                     "train/ce_loss": ce_losses.avg,
-                    "train/batch_time": train_batch_time.avg,
-                    "train/data_time": train_data_time.avg,
+                    "train/batch_time": batch_time.avg,
+                    "train/data_time": data_time.avg,
                 }
                 log_dict["train/edge_loss"] = edge_losses.avg
                 for k, meter in edge_type_losses.items():
@@ -205,9 +223,9 @@ def _fit_loop(
                     log_dict[f"train/{mode}_edge_loss"] = modewise_edge_losses[i].avg
                 wb.log(log_dict, step=step)
 
-                train_batch_time.reset()
-                train_data_time.reset()
-                train_losses.reset()
+                batch_time.reset()
+                data_time.reset()
+                losses.reset()
                 ce_losses.reset()
                 for k, mode in enumerate(mode_names):
                     modewise_total_losses[k].reset()
@@ -224,4 +242,4 @@ def _fit_loop(
             
             
         if (step % save_freq == 0) or last_step:
-            model.save_checkpoint(os.path.join(log_dir, f"ckpt_{epoch}"))
+            model.save_checkpoint(os.path.join(log_dir, f"ckpt_{step}"))

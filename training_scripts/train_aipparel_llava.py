@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, asdict
 import logging 
 log = logging.getLogger(__name__)
 import hydra
-from typing import Literal, List
+from typing import Literal
 import deepspeed
 import numpy as np
 import torch
@@ -17,6 +17,9 @@ import transformers
 from typing import Optional
 
 from models.aipparel_llava_next import AIpparelLlavaNextForConditionalGeneration
+from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
+from data.collate_fns import llava_next_collate_fn
+from trainers.train import train
 
 @dataclass
 class MainConfig:
@@ -24,8 +27,14 @@ class MainConfig:
     precision: Literal["bf16", "fp16"] = "bf16"
     eval_only: bool = False
     gen_only: bool = False
-    pre_trained: Optional[str] = None
+    resume: Optional[str] = None
     from_start: bool = False
+    grad_accumulation_steps: int = 1
+    num_steps: int = 10000
+    warmup_steps: int = 100
+    save_freq: int = 500
+    batch_size: int = 16
+    optimizer: dict = field(default_factory=lambda: {"lr": 1e-4, "beta1": 0.9, "beta2": 0.999})
 
 @hydra.main(version_base=None, config_path='./configs', config_name='config')
 def main(cfg: MainConfig):
@@ -70,7 +79,6 @@ def main(cfg: MainConfig):
     for token in all_new_tokens:
         token_idx = processor.tokenizer(token, add_special_tokens=False).input_ids[0]
         token_name2_idx_dict[token] = token_idx
-    image_token_idx = processor.tokenizer(processor.image_token, add_special_tokens=False).input_ids[0]
         
     if master_process:
         log.info(f"Token name to index dictionary: {token_name2_idx_dict}")
@@ -83,7 +91,8 @@ def main(cfg: MainConfig):
         torch_dtype = torch.half
 
     model = AIpparelLlavaNextForConditionalGeneration.from_pretrained(
-        cfg.version
+        cfg.version,
+        
     )
     
     model.config.transf_token = PanelEdgeTypeV3.MOVE.value
@@ -131,13 +140,11 @@ def main(cfg: MainConfig):
         
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Total parameters: {total_params}, Trainable parameters: {trainable_params}")
-    
+    print(f"Total parameters: {total_params}, Trainable parameters: {trainable_params} ({trainable_params/total_params:.4f})")
     if cfg.eval_only:
-        trainer.eval_step(trainer.start_epoch * trainer.steps_per_epoch)
-        trainer.generation_step(trainer.start_epoch * trainer.steps_per_epoch)
+        pass
     elif cfg.gen_only:
-        trainer.generation_step(trainer.start_epoch)
+        pass
     else:
         optimizer_config = {
             "type": "AdamW",
@@ -169,19 +176,23 @@ def main(cfg: MainConfig):
             "gradient_clipping": 1.0,
             "zero_optimization": {
                 "stage": 3,
-                "cpu_offload": true,
-                "cpu_offload_params": true,
-                "cpu_offload_use_pin_memory" : true,
-                "overlap_comm": true,
-                "contiguous_gradients": true,
+                "offload_param": {
+                    "device": "cpu",
+                    "nvme_path": "/local_nvme",
+                    "pin_memory": True,
+                    "buffer_count": 5,
+                    "buffer_size": 1e8,
+                    "max_in_cpu": 1e9
+                },
+                "overlap_comm": True,
+                "contiguous_gradients": True,
                 "stage3_max_live_parameters": 1e9,
                 "stage3_max_reuse_distance": 1e9,
                 "stage3_prefetch_bucket_size": 0.94e6,
                 "stage3_param_persistence_threshold": 1e4,
                 "reduce_bucket_size": 1e6,
-                "prefetch_bucket_size": 3e6,
                 "sub_group_size": 1e14,
-                "stage3_gather_fp16_weights_on_model_save": true
+                "gather_16bit_weights_on_model_save": True
             },
 
         }
@@ -207,7 +218,8 @@ def main(cfg: MainConfig):
         scheduler,
         garment_tokenizer,
         ddp_rank, 
-        ddp_world_size
+        ddp_world_size,
+        output_dir
     )
 
 

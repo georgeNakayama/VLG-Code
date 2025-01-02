@@ -1,6 +1,0 @@
-_target_: data.data_wrappers.garment_image_data_wrapper.GarmentImageDataWrapper
-defaults:
-  - data_split: full_training_token
-  - dataset: qva_garment_token_dataset
-
-collate_fn: data.data_wrappers.collate_fns.collate_fn_default

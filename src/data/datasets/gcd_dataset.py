@@ -9,15 +9,15 @@ import random
 import json
 # My
 from data.patterns.gcd_pattern.pattern_converter import NNSewingPattern
-from data.datasets.garmentcodedata.panel_classes import PanelClasses
-from data.datasets.utils import (SHORT_QUESTION_LIST, 
-                                 ANSWER_LIST, 
-                                 DEFAULT_PLACEHOLDER_TOKEN, 
-                                 DESCRIPTIVE_TEXT_SHORT_QUESTION_LIST, 
-                                 SPECULATIVE_TEXT_SHORT_QUESTION_LIST, 
-                                 SHORT_QUESTION_WITH_TEXT_LIST,
-                                 EDITING_QUESTION_LIST
-                                 )
+from data.patterns.gcd_pattern.panel_classes import PanelClasses
+from .utils import (SHORT_QUESTION_LIST, 
+                    ANSWER_LIST, 
+                    DEFAULT_PLACEHOLDER_TOKEN, 
+                    DESCRIPTIVE_TEXT_SHORT_QUESTION_LIST, 
+                    SPECULATIVE_TEXT_SHORT_QUESTION_LIST, 
+                    SHORT_QUESTION_WITH_TEXT_LIST,
+                    EDITING_QUESTION_LIST
+                    )
 
 ## incorperating the changes from maria's three dataset classes into a new
 ## dataset class. this also includes features from sewformer, for interoperability

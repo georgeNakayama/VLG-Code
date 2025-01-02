@@ -1,6 +1,0 @@
-defaults:
-  - outlines: sewfactory_regression 
-  - rotations: sewfactory_regression 
-  - stitch_tags: sewfactory
-  - translations: sewfactory_regression
-  - vertices: sewfactory_regression

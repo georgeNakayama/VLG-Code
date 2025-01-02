@@ -1,8 +1,0 @@
-_target_: data_wrappers.garment_token_data_wrapper.GarmentTokenDataWrapper
-batch_size: 64
-sequence_length: 256
-panel_classification: ./assets/data_configs/panel_classes_condenced.json
-filter_by_params: ./assets/data_configs/param_filter.json
-token_dir: /home/w4756677/garment/garment_foundation_model/sewformer/SewFormer/assets/data/tokens_07192024.npy
-stop_token: 142
-class_tokens: [128, 129, 130, 131, 132, 133, 134, 135, 136, 137]

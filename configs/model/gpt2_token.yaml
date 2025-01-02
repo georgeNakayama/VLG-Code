@@ -1,5 +1,0 @@
-_target_: models.gpt2.GPTToken
-block_size: 282
-n_layer: 24
-n_head: 8
-n_embd: 512

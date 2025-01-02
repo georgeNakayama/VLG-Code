@@ -28,7 +28,6 @@ from transformers.modeling_outputs import ModelOutput
 
 from transformers import LlavaNextConfig
 from transformers import LlavaNextForConditionalGeneration
-from .aipparel_llava import AIpparelLlavaCausalLMOutputWithPast
 from .encodings import SinusoidalEncoding
 class PanelEdgeType(Enum):
     LINE = 0 
@@ -95,6 +94,25 @@ class AIpparelLlavaNextConfig(LlavaNextConfig):
         self.pattern_end_token_index = pattern_end_token_index
         self.panel_start_token_index = panel_start_token_index
         self.panel_end_token_index = panel_end_token_index
+        
+        self.transf_token = transf_token
+        self.transf_token_index = transf_token_index
+        self.line_token = line_token
+        self.line_token_index = line_token_index
+        self.quadratic_token = quadratic_token
+        self.quadratic_token_index = quadratic_token_index
+        self.cubic_token = cubic_token
+        self.cubic_token_index = cubic_token_index
+        self.arc_token = arc_token
+        self.arc_token_index = arc_token_index
+        self.cline_token = cline_token
+        self.cline_token_index = cline_token_index
+        self.cquadratic_token = cquadratic_token
+        self.cquadratic_token_index = cquadratic_token_index
+        self.ccubic_token = ccubic_token
+        self.ccubic_token_index = ccubic_token_index
+        self.carc_token = carc_token
+        self.carc_token_index = carc_token_index
         
         
     def get_all_edge_indices(self, ret_dict=True):
@@ -247,7 +265,7 @@ class AIpparelLlavaNextForConditionalGeneration(LlavaNextForConditionalGeneratio
         pattern_endpoint_masks: Optional[torch.BoolTensor] = None,
         pattern_transfs: Optional[torch.FloatTensor] = None,
         pattern_transf_masks: Optional[torch.BoolTensor] = None
-    ) -> Union[Tuple, AIpparelLlavaCausalLMOutputWithPast]:
+    ) -> Union[Tuple, AIpparelLlavaNextCausalLMOutputWithPast]:
         r"""
         Args:
             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
@@ -305,18 +323,8 @@ class AIpparelLlavaNextForConditionalGeneration(LlavaNextForConditionalGeneratio
             raise ValueError(
                 "You cannot specify both pixel_values and inputs_embeds at the same time, and must specify either one"
             )
-
-        legacy_processing = False
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
-
-            # if the number of image tokens is more than image embeddings seq length, then prob we expanded it in processing
-            # not very reliable, but we don't expect one to actually pass 500+ images for one prompt
-            # In case we're in decoding stage, legacy behavior is checked by presence of pixel values even if use_cache=True
-            legacy_processing = (
-                (input_ids == self.config.image_token_index).sum(1).max() < self.config.image_seq_length
-            ) or (input_ids.shape[-1] == 1 and pixel_values is not None)
-
         image_features = None
         if pixel_values is not None and pixel_values.size(0) > 0:
             image_features = self.get_image_features(
@@ -334,58 +342,8 @@ class AIpparelLlavaNextForConditionalGeneration(LlavaNextForConditionalGeneratio
                 image_newline=self.image_newline,
             )
 
-        if legacy_processing:
-            logger.warning_once(
-                "Expanding inputs for image tokens in LLaVa-NeXT should be done in processing. "
-                "Please add `patch_size` and `vision_feature_select_strategy` to the model's processing config or set directly "
-                "with `processor.patch_size = {{patch_size}}` and processor.vision_feature_select_strategy = {{vision_feature_select_strategy}}`. "
-                "Using processors without these attributes in the config is deprecated and will throw an error in v4.50."
-            )
-            if input_ids.shape[1] != 1:
-                inputs_embeds = inputs_embeds.to(image_features.dtype)
-                inputs_embeds, attention_mask, position_ids, labels, _ = self._merge_input_ids_with_image_features(
-                    image_features,
-                    feature_lens,
-                    inputs_embeds,
-                    input_ids,
-                    attention_mask,
-                    position_ids,
-                    labels=labels,
-                )
-                cache_position = torch.arange(attention_mask.shape[1], device=attention_mask.device)
-            else:
-                # Retrieve the first layer to inspect the logits and mask out the hidden states
-                # that are set to 0
-                first_layer_past_key_value = past_key_values[0][0][:, :, :, 0]
-
-                # Sum all dimensions of head_dim (-2) to avoid random errors such as: https://github.com/huggingface/transformers/pull/28032#issuecomment-1863691941
-                batch_index, non_attended_tokens = torch.where(first_layer_past_key_value.float().sum(-2) == 0)
-
-                # Get the target length
-                target_length = input_ids.shape[1]
-                past_length = first_layer_past_key_value.shape[-1]
-
-                extended_attention_mask = torch.ones(
-                    (attention_mask.shape[0], past_length),
-                    dtype=attention_mask.dtype,
-                    device=attention_mask.device,
-                )
-
-                # Filter out only the tokens that can be un-attended, this can happen
-                # if one uses Llava + Fused modules where the cache on the
-                # first iteration is already big enough, or if one passes custom cache
-                valid_indices = non_attended_tokens < extended_attention_mask.size(-1)
-                new_batch_index = batch_index[valid_indices]
-                new_non_attended_tokens = non_attended_tokens[valid_indices]
-
-                # Zero-out the places where we don't need to attend
-                extended_attention_mask[new_batch_index, new_non_attended_tokens] = 0
-                attention_mask = torch.cat((extended_attention_mask, attention_mask[:, -target_length:]), dim=1)
-                position_ids = torch.sum(attention_mask, dim=1).unsqueeze(-1) - 1
-                cache_position = torch.arange(attention_mask.shape[1], device=attention_mask.device)[-target_length:]
-
         # TODO: @raushan retain only the new behavior after v4.47
-        elif image_features is not None:
+        if image_features is not None:
             n_image_tokens = (input_ids == self.config.image_token_index).sum().item()
             n_image_features = image_features.shape[0]
             if n_image_tokens != n_image_features:
@@ -402,8 +360,8 @@ class AIpparelLlavaNextForConditionalGeneration(LlavaNextForConditionalGeneratio
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
         if input_ids is not None and labels is not None:
-            transf_mask = input_ids == self.config.get_all_edge_indices(ret_dict=False)[:1]
-            edge_mask = torch.isin(input_ids, self.config.get_all_edge_indices(ret_dict=False)[1:])
+            transf_mask = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
+            edge_mask = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
             if (edge_mask is not None and pattern_endpoints is not None and pattern_endpoint_masks is not None):
                 assert edge_mask.sum() == pattern_endpoint_masks.sum(), "edge mask has shape {} but endpoints mask has shape {}" \
                     .format(edge_mask.sum(), pattern_endpoint_masks.sum())
@@ -455,8 +413,8 @@ class AIpparelLlavaNextForConditionalGeneration(LlavaNextForConditionalGeneratio
 
             # Regression loss
             last_hidden_state = output.hidden_states[-1]
-            param_preds = {k:torch.zeros_like(v) for k,v in param_targets.items()}
-            if param_target_masks is not None:
+            param_preds = {k:torch.zeros_like(v) for k,v in pattern_params.items()}
+            if pattern_params_mask is not None:
                 edge_loss = 0
                 for i, (edge_type, ind) in self.config.get_all_edge_indices(ret_dict=True).items():
                     mask = labels[..., 1:] == ind
@@ -504,7 +462,7 @@ class AIpparelLlavaNextForConditionalGeneration(LlavaNextForConditionalGeneratio
             output = (logits,) + outputs[1:]
             return (total_loss,) + output if loss is not None else output
 
-        return AIpparelLlavaCausalLMOutputWithPast(
+        return AIpparelLlavaNextCausalLMOutputWithPast(
             loss=total_loss,
             ce_loss=ce_loss,
             edge_loss=edge_loss,

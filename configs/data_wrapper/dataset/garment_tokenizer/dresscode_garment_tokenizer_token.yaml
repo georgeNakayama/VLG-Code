@@ -1,9 +1,0 @@
-defaults:
-  - standardize: neural_tailor_token_stats
-
-_target_: data.garment_tokenizers.dresscode_garment_tokenizer.DressCodeGarmentTokenizer
-encode_stitches_as_tags: True
-include_template_name: False
-random_tag: True
-num_tags: 24
-num_bins: 256

@@ -1,0 +1,9 @@
+defaults:
+  - standardize: garmentcodedata_regression_stats
+
+_target_: data.garment_tokenizers.garment_tokenizer_for_regression.GarmentTokenizerForRegression
+encode_stitches_as_tags: True
+sf_only: False
+include_template_name: False
+random_tag: True
+num_tags: 108

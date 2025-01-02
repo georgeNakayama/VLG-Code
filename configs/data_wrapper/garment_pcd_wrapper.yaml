@@ -1,7 +1,0 @@
-defaults:
-  - data_split: full_training
-  - dataset: garment_pcd_dataset
-_target_: data.data_wrappers.wrapper_pcd_hydra.PCDDatasetWrapper
-batch_size: 128
-shuffle_train: true 
-num_workers: 12

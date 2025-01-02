@@ -1,6 +1,0 @@
-defaults:
-  - outlines: sewfactory_token 
-  - rotations: sewfactory_token
-  - stitch_tags: sewfactory 
-  - translations: neural_tailor_token
-  - vertices: neural_tailor_token

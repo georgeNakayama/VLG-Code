@@ -1,4 +1,0 @@
-defaults:
-  - /data_wrapper/dataset/standardize/outlines@standardize_config: sewfactory
-  - /data_wrapper/dataset/panel_info@panel_info_config: garment_panel_info
-_target_: metrics.metrics_hydra.NumbersInPanelsAccuracies

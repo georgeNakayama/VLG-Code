@@ -1,3 +1,0 @@
-_target_: metrics.losses_hydra.PatternStitchLoss
-triplet_margin: 0.1
-use_hardnet: true

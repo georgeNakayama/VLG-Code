@@ -157,7 +157,7 @@ def construct_labels(
     label_list.append(labels)
     labels = torch.stack(label_list)
     # Mask the padding token and image token
-    pad_or_image_mask = torch.isin(labels, [processor.tokenizer.pad_token_id, image_token_id])
+    pad_or_image_mask = torch.isin(labels, torch.tensor([processor.tokenizer.pad_token_id, image_token_id]))
     labels[pad_or_image_mask] = IGNORE_INDEX
     return labels
     

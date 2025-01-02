@@ -1,7 +1,5 @@
 
-import torch, numpy as np, os, sys
-from pathlib import Path 
-from enum import Enum
+import torch, numpy as np
 from typing import List, Tuple, Dict, Union, Any
 from scipy.spatial.transform import Rotation as R  
 from collections import defaultdict
@@ -9,14 +7,13 @@ from collections import defaultdict
 import logging 
 log = logging.getLogger(__name__)   
 from transformers import PreTrainedTokenizer
-from data.datasets.garmentcodedata.garmentcode_dataset import GarmentCodeData
-from data.datasets.garmentcodedata.pattern_converter import NNSewingPattern as GCD_NNSewingPattern
-from data.garment_tokenizers.utils import arc_rad_flags_to_three_point, control_to_abs_coord, discretize, control_to_relative_coord, arc_from_three_points, panel_universal_transtation, is_colinear
+from data.patterns.gcd_pattern.pattern_converter import NNSewingPattern as GCD_NNSewingPattern
+from data.garment_tokenizers.utils import control_to_relative_coord, arc_from_three_points, panel_universal_transtation, is_colinear
 from scipy.spatial.transform import Rotation
 from data.datasets.utils import IMAGE_TOKEN_INDEX
 from data.patterns.sf_pattern.pattern_converter import NNSewingPattern as SF_SewingPattern
 from data.datasets.panel_configs import *
-from data.garment_tokenizers.special_tokens import SpecialTokensV2, SpecialTokensIndices, PanelEdgeTypeV3, PanelEdgeTypeIndices, DecodeErrorTypes
+from data.garment_tokenizers.special_tokens import SpecialTokensV2, PanelEdgeTypeV3, PanelEdgeTypeIndices, DecodeErrorTypes
 from .default_garment_tokenizer import GarmentTokenizer
 
 class GarmentTokenizerForRegression(GarmentTokenizer): 
@@ -316,36 +313,3 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
 
         pattern['stitches'] = [stitches for stitches in edge_stitches.values() if len(stitches) == 2]
         return pattern, DecodeErrorTypes.NO_ERROR
-
-if __name__ == "__main__":
-    root_dir = "/miele/timur/garmentcodedata"
-    dataset = GarmentCodeData(root_dir, start_config={'random_pairs_mode': False, 'body_type' : 'default_body',
-                        'panel_classification' : '/home/timur/sewformer-garments/garment-estimator/nn/data_configs/panel_classes.json',
-                        'max_pattern_len' : 37,                            
-                        'max_panel_len' : 40,
-                        'max_num_stitches' : 108,
-                        'mesh_samples' : 2000, 
-                        'max_datapoints_per_folder' : 10,                          
-                        'stitched_edge_pairs_num': 100, 'non_stitched_edge_pairs_num': 100,
-                        'shuffle_pairs': False, 'shuffle_pairs_order': False, 
-                        'data_folders': [
-                        "garments_5000_0",
-                        # "garments_5000_1", "garments_5000_2", "garments_5000_3", "garments_5000_4", "garments_5000_5", "garments_5000_6", "garments_5000_7", "garments_5000_8"
-                        ]})
-    
-    conf = StandardizeConfig(
-        outlines=StatsConfig(shift=[-51.205456, -49.627438, 0.0, -0.35, 0.0, -0.35, 0.0], scale=[104.316666, 99.264435, 0.5, 0.7, 0.8, 0.7, 1.0]),
-        rotations=StatsConfig(shift=[0, 0], scale=[0.5, 0.5]),
-        stitch_tags=StatsConfig(shift=[0, 0], scale=[0., 0.5]),
-        translations=StatsConfig(shift=[0, 0], scale=[0.5, 0.5]),
-        vertices=StatsConfig(shift=[-30, -70], scale=[190, 180])
-    )
-
-    garment_code = DefaultGarmentCode(standardize=conf)
-    tokens = garment_code.encode(dataset, 0)
-
-    print(tokens)
-
-    tensor, names, description = garment_code.decode(np.array(tokens))
-
-    import code; code.interact(local=locals())

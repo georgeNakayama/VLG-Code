@@ -1,9 +1,0 @@
-defaults:
-  - standardize: sewfactory_regression_stats
-
-_target_: data.garment_tokenizers.sewfactory_garment_tokenizer_for_regression.SewFactoryGarmentTokenizerForRegression
-encode_stitches_as_tags: True
-include_template_name: False
-random_tag: True
-num_tags: 28
-sf_only: true

@@ -1,0 +1,12 @@
+_target_: data.datasets.gcd_dataset.GarmentCodeData
+
+root_dir: /miele/timur/garmentcodedata
+editing_dir: /mnt/gs/sci-garment/garmentcodedata_editing
+caption_dir: /mnt/gs/sci-garment/long-caption-processed
+# sampling_rate: [0,0,0,0,1]
+editing_flip_prob: 0.5
+sampling_rate: [0.3, 0.1, 0.1, 0.4, 0.1]
+panel_classification: assets/panel_classes_garmentcodedata.json
+body_type: default_body
+datalist_file: assets/garmentcodedata_filtered_09142024.txt
+split_file: assets/garmentcodedata_datasplit.json
