@@ -254,6 +254,21 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         self.vertex_proj[-1].weight.data.zero_()
         self.transf_proj[-1].weight.data.zero_()
 
+    def resize_token_embeddings(self, new_num_tokens: int):
+        # mysterious 8
+        new_embeddings = nn.Embedding(self.config.text_config.vocab_size + new_num_tokens + 8, self.config.text_config.hidden_size)
+        old_embeddings = self.get_input_embeddings()
+        new_embeddings.weight.data[: self.config.text_config.vocab_size, :] = old_embeddings.weight.data[:self.config.text_config.vocab_size, :].clone()
+        mean, std = old_embeddings.weight.data.mean(0), old_embeddings.weight.data.std(0) * 1e-5
+        new_embeddings.weight.data[self.config.text_config.vocab_size:self.config.text_config.vocab_size + new_num_tokens] = mean[None] + std[None] * torch.randn(new_num_tokens, self.config.text_config.hidden_size)
+        new_embeddings.weight.data[-8:] = old_embeddings.weight.data[-8:, :].clone()
+        self.set_input_embeddings(new_embeddings)
+        old_lm_head = self.get_output_embeddings()
+        new_lm_head = nn.Linear(self.config.text_config.hidden_size, self.config.text_config.vocab_size + new_num_tokens, bias=False)
+        new_lm_head.weight.data[: self.config.text_config.vocab_size, :] = old_lm_head.weight.data[:self.config.text_config.vocab_size, :].clone()
+        new_lm_head.weight.data[self.config.text_config.vocab_size:] = mean[None, :] + std[None, :] * torch.randn(new_num_tokens, self.config.text_config.hidden_size)
+        self.config.text_config.vocab_size = self.config.text_config.vocab_size + new_num_tokens
+        self.set_output_embeddings(new_lm_head)
 
     def forward(
         self,
@@ -416,7 +431,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             param_preds = {k:torch.zeros_like(v) for k,v in pattern_params.items()}
             if pattern_params_mask is not None:
                 edge_loss = 0
-                for i, (edge_type, ind) in self.config.get_all_edge_indices(ret_dict=True).items():
+                for i, (edge_type, ind) in enumerate(self.config.get_all_edge_indices(ret_dict=True).items()):
                     mask = labels[..., 1:] == ind
                     mask = torch.cat([mask, torch.zeros_like(mask)[..., :1]], dim=1)
                     if not mask.any():

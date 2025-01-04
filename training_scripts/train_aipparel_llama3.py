@@ -97,7 +97,6 @@ def main(cfg: MainConfig):
         cfg.version,
         **model_dict
     )
-    print(model)
     
     model.config.transf_token = PanelEdgeTypeV3.MOVE.value
     model.config.transf_token_index = garment_tokenizer.panel_edge_type_indices.move_idx
@@ -137,10 +136,13 @@ def main(cfg: MainConfig):
     for p in model.multi_modal_projector.parameters():
         p.requires_grad = False
 
-    model.resize_token_embeddings(len(processor.tokenizer))
-    model.set_output_embeddings(torch.nn.Linear(model.config.text_config.hidden_size, len(processor.tokenizer), bias=False))
-    for name, module in model.named_parameters():
-        print(name, module.shape, module.requires_grad)
+    print(model.get_input_embeddings())
+    print(model.get_output_embeddings())
+    model.resize_token_embeddings(num_added_tokens)
+    print(model.get_input_embeddings())
+    print(model.get_output_embeddings())
+    # for name, module in model.named_parameters():
+    #     print(name, module.shape, module.requires_grad)
         
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
