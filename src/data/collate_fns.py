@@ -84,7 +84,12 @@ def collate_fn(
     pattern_params = dict()
     pattern_params_mask = dict()
     for key in pattern_param_keys:
-        padded_params = torch.nn.utils.rnn.pad_sequence([v for pattern_param in pattern_param_list for k, v in pattern_param.items() if k == key], batch_first=True, padding_value=0)
+        param_num = -1
+        for pattern_param in pattern_param_list:
+            if key in pattern_param:
+                param_num = pattern_param[key].shape[-1]
+                break
+        padded_params = torch.nn.utils.rnn.pad_sequence([pattern_param[key] if key in pattern_param else torch.zeros(1, param_num) for pattern_param in pattern_param_list], batch_first=True, padding_value=0)
         pattern_params[key] = padded_params
         pattern_params_mask[key] = torch.arange(padded_params.shape[1]).unsqueeze(0) < torch.tensor([padded_param[key].shape[0] if key in padded_param else 0 for padded_param in pattern_param_list]).unsqueeze(1)
 
