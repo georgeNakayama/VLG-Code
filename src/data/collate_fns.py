@@ -132,6 +132,8 @@ def construct_labels(
                 assert len(inst_end_inds) == 1, "only support one instruction for now"
                 labels[last_idx:inst_end_inds[0] + 4 + last_idx] = IGNORE_INDEX
                 last_idx = idx+4
+                label_list.append(labels)
+                
     elif model_version == "meta-llama/Llama-3.2-11B-Vision-Instruct":
         image_token_id = 128256
         prompt_header_seqs = torch.tensor([[128006, 9125, 128007],[128006, 882, 128007]])
@@ -154,7 +156,7 @@ def construct_labels(
             header_ind = find_header(assistant_header_seq,labels)[0]
             labels[header_ind: header_ind + 3] = IGNORE_INDEX
         
-    label_list.append(labels)
+            label_list.append(labels)
     labels = torch.stack(label_list)
     # Mask the padding token and image token
     pad_or_image_mask = torch.isin(labels, torch.tensor([processor.tokenizer.pad_token_id, image_token_id]))
