@@ -71,8 +71,8 @@ def main(cfg: MainConfig):
         cfg.version,
     )
     
-    processor.tokenizer.add_tokens("<pad>", special_tokens=True)
-    processor.tokenizer.pad_token = "<pad>"
+    # processor.tokenizer.add_tokens("<pad>", special_tokens=True)
+    processor.tokenizer.pad_token = "<|finetune_right_pad_id|>"
     all_new_tokens = garment_tokenizer.get_all_token_names()
     num_added_tokens = processor.tokenizer.add_tokens(all_new_tokens, special_tokens=True)
     if master_process:
@@ -97,6 +97,7 @@ def main(cfg: MainConfig):
         cfg.version,
         **model_dict
     )
+    print(model)
     
     model.config.transf_token = PanelEdgeTypeV3.MOVE.value
     model.config.transf_token_index = garment_tokenizer.panel_edge_type_indices.move_idx
@@ -137,7 +138,7 @@ def main(cfg: MainConfig):
         p.requires_grad = False
 
     model.resize_token_embeddings(len(processor.tokenizer))
-
+    model.set_output_embeddings(torch.nn.Linear(model.config.text_config.hidden_size, len(processor.tokenizer), bias=False))
     for name, module in model.named_parameters():
         print(name, module.shape, module.requires_grad)
         

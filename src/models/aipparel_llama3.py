@@ -412,7 +412,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         edge_loss = None
         if labels is not None:
             # Regression loss
-            last_hidden_state = output.hidden_states[-1]
+            last_hidden_state = outputs.hidden_states[-1]
             param_preds = {k:torch.zeros_like(v) for k,v in pattern_params.items()}
             if pattern_params_mask is not None:
                 edge_loss = 0
