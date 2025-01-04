@@ -136,7 +136,7 @@ def main(cfg: MainConfig):
     for p in model.multi_modal_projector.parameters():
         p.requires_grad = False
 
-    model.resize_token_embeddings(num_added_tokens)
+    model.resize_token_embeddings(len(processor.tokenizer) - model.vocab_size)
     # for name, module in model.named_parameters():
     #     print(name, module.shape, module.requires_grad)
         
