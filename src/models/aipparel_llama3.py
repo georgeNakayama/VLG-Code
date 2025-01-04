@@ -268,6 +268,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         new_lm_head.weight.data[: self.config.text_config.vocab_size, :] = old_lm_head.weight.data[:self.config.text_config.vocab_size, :].clone()
         new_lm_head.weight.data[self.config.text_config.vocab_size:] = mean[None, :] + std[None, :] * torch.randn(new_num_tokens, self.config.text_config.hidden_size)
         self.config.text_config.vocab_size = self.config.text_config.vocab_size + new_num_tokens
+        self.vocab_size = self.config.text_config.vocab_size
         self.set_output_embeddings(new_lm_head)
 
     def forward(
