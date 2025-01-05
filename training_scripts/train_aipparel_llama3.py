@@ -177,24 +177,12 @@ def main(cfg: MainConfig):
             },
             "gradient_clipping": 1.0,
             "zero_optimization": {
-                "stage": 3,
-                "offload_param": {
-                    "device": "cpu",
-                    "nvme_path": "/local_nvme",
-                    "pin_memory": True,
-                    "buffer_count": 5,
-                    "buffer_size": 1e8,
-                    "max_in_cpu": 1e9
-                },
-                "overlap_comm": True,
+                "stage": 2,
                 "contiguous_gradients": True,
-                "stage3_max_live_parameters": 1e9,
-                "stage3_max_reuse_distance": 1e9,
-                "stage3_prefetch_bucket_size": 0.94e6,
-                "stage3_param_persistence_threshold": 1e4,
-                "reduce_bucket_size": 1e6,
-                "sub_group_size": 1e14,
-                "gather_16bit_weights_on_model_save": True
+                "overlap_comm": True,
+                "reduce_scatter": True,
+                "reduce_bucket_size": 5e8,
+                "allgather_bucket_size": 5e8,
             },
 
         }

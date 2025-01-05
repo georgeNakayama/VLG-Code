@@ -449,8 +449,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             if pattern_params_mask is not None:
                 edge_loss = 0
                 for edge_type, ind in self.config.get_all_edge_indices(ret_dict=True).items():
-                    if ind == self.config.cline_token_index:
-                        continue
                     mask = labels[..., 1:] == ind
                     mask = torch.cat([mask, torch.zeros_like(mask)[..., :1]], dim=1)
                     if not mask.any():
@@ -458,6 +456,8 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         continue
                     panel_embeds = last_hidden_state[mask]
                     panel_params = self.regression_head(panel_embeds)
+                    if ind == self.config.cline_token_index:
+                        continue
                     if ind == self.config.transf_token_index:
                         # transf
                         panel_params = panel_params[:, :7]
@@ -478,7 +478,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         panel_params = panel_params[:, 9:11]
                     elif ind == self.config.ccubic_token_index:
                         # c_cubic
-                        panel_params = panel_params[:, 11:13]
+                        panel_params = panel_params[:, 9:13]
                     elif ind == self.config.carc_token_index:
                         # c_arc
                         panel_params = panel_params[:, 13:15]
