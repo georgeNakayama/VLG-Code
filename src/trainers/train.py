@@ -132,10 +132,10 @@ def _fit_loop(
         prefix="Step:",
     )
     model.train()
+    if ddp_rank == 0:
+        log.info("Start Training...")
     for step in range(start_step, num_steps):
         last_step = (step == num_steps - 1)
-        if ddp_rank == 0:
-            log.info("Start Training...")
         for i in range(grad_accumulation_steps):
             end = time.time()
             try:

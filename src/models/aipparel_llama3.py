@@ -439,9 +439,9 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             shift_labels = shift_labels.view(-1)
             # Enable model/pipeline parallelism
             shift_labels = shift_labels.to(shift_logits.device)
-            loss = nn.functional.cross_entropy(shift_logits, shift_labels, ignore_index=-100, reduction='none')
+            ce_loss = nn.functional.cross_entropy(shift_logits, shift_labels, ignore_index=-100, reduction='none')
             shift_labels = shift_labels.view(logits.shape[0], -1)
-            loss = loss.view(logits.shape[0], -1).sum(dim=1) / (shift_labels != -100).sum(1)
+            ce_loss = ce_loss.view(logits.shape[0], -1).sum(dim=1) / (shift_labels != -100).sum(1)
             
             # Regression loss
             last_hidden_state = outputs.hidden_states[-1]
