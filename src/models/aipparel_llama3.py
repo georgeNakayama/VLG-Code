@@ -191,6 +191,9 @@ class AIpparelMllamaCausalLMOutputWithPast(ModelOutput):
     """
 
     loss: Optional[torch.FloatTensor] = None
+    ce_loss: Optional[torch.FloatTensor] = None
+    edge_loss: Optional[torch.FloatTensor] = None
+    edge_type_losses: Optional[Dict[int, torch.FloatTensor]] = None
     logits: torch.FloatTensor = None
     past_key_values: Optional[List[torch.FloatTensor]] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
@@ -414,25 +417,40 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             past_key_values=past_key_values,
             use_cache=use_cache,
             inputs_embeds=inputs_embeds,
-            labels=labels,
-            output_hidden_states=output_hidden_states,
+            labels=None,
+            output_hidden_states=True,
             output_attentions=output_attentions,
             return_dict=return_dict,
             cache_position=cache_position,
             num_logits_to_keep=num_logits_to_keep,
         )
-        ce_loss = outputs.loss
+        ce_loss = None
         logits = outputs.logits
         total_loss = None
         edge_type_losses = {}
         edge_loss = None
         if labels is not None:
+            # ce loss
+            # Shift so that tokens < n predict n
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            shift_logits = shift_logits.view(-1, self.vocab_size)
+            shift_labels = shift_labels.view(-1)
+            # Enable model/pipeline parallelism
+            shift_labels = shift_labels.to(shift_logits.device)
+            loss = nn.functional.cross_entropy(shift_logits, shift_labels, ignore_index=-100, reduction='none')
+            shift_labels = shift_labels.view(logits.shape[0], -1)
+            loss = loss.view(logits.shape[0], -1).sum(dim=1) / (shift_labels != -100).sum(1)
+            
             # Regression loss
             last_hidden_state = outputs.hidden_states[-1]
             param_preds = {k:torch.zeros_like(v) for k,v in pattern_params.items()}
             if pattern_params_mask is not None:
                 edge_loss = 0
-                for i, (edge_type, ind) in enumerate(self.config.get_all_edge_indices(ret_dict=True).items()):
+                for edge_type, ind in self.config.get_all_edge_indices(ret_dict=True).items():
+                    if ind == self.config.cline_token_index:
+                        continue
                     mask = labels[..., 1:] == ind
                     mask = torch.cat([mask, torch.zeros_like(mask)[..., :1]], dim=1)
                     if not mask.any():
@@ -440,28 +458,28 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         continue
                     panel_embeds = last_hidden_state[mask]
                     panel_params = self.regression_head(panel_embeds)
-                    if i == 0:
+                    if ind == self.config.transf_token_index:
                         # transf
                         panel_params = panel_params[:, :7]
-                    elif i == 1:
+                    elif ind == self.config.line_token_index:
                         # line
                         panel_params = panel_params[:, 7:9]
-                    elif i == 2:
+                    elif ind == self.config.quadratic_token_index:
                         # quadratic
                         panel_params = panel_params[:, 7:11]
-                    elif i == 3:
+                    elif ind == self.config.cubic_token_index:
                         # cubic
                         panel_params = panel_params[:, 7:13]
-                    elif i == 4:
+                    elif ind == self.config.arc_token_index:
                         # arc
                         panel_params = torch.cat([panel_params[:, 7:9], panel_params[:, 13:15]], dim=-1)
-                    elif i == 6:
+                    elif ind == self.config.cquadratic_token_index:
                         # c_quadratic
                         panel_params = panel_params[:, 9:11]
-                    elif i == 7:
+                    elif ind == self.config.ccubic_token_index:
                         # c_cubic
                         panel_params = panel_params[:, 11:13]
-                    elif i == 8:
+                    elif ind == self.config.carc_token_index:
                         # c_arc
                         panel_params = panel_params[:, 13:15]
                         
