@@ -183,16 +183,16 @@ def _fit_loop(
             for k, meter in edge_type_losses.items():
                 if f"{k}_loss" in output.edge_type_losses.keys():
                     meter.update(output.edge_type_losses[f"{k}_loss"], B)
-        for i, mode in enumerate(mode_names):
-            mask = input_dict["sample_type"] == i
-            if not mask.any():
-                continue
-            mode_loss = loss[mask]
-            modewise_total_losses[i].update(mode_loss.mean(), mode_loss.size(0))
-            mode_ce_loss = ce_loss[mask]
-            modewise_ce_losses[i].update(mode_ce_loss.mean(), mode_ce_loss.size(0))
-            mode_edge_loss = edge_loss[mask]
-            modewise_edge_losses[i].update(mode_edge_loss.mean(), mode_edge_loss.size(0))
+            for i, mode in enumerate(mode_names):
+                mask = input_dict["sample_type"] == i
+                if not mask.any():
+                    continue
+                mode_loss = loss[mask]
+                modewise_total_losses[i].update(mode_loss.mean(), mode_loss.size(0))
+                mode_ce_loss = ce_loss[mask]
+                modewise_ce_losses[i].update(mode_ce_loss.mean(), mode_ce_loss.size(0))
+                mode_edge_loss = edge_loss[mask]
+                modewise_edge_losses[i].update(mode_edge_loss.mean(), mode_edge_loss.size(0))
         
         # logging
         if ddp_world_size > 1:
