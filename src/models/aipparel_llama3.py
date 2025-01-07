@@ -507,6 +507,184 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             attentions=outputs.attentions,
         )
 
+    def pmpo_forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        aspect_ratio_ids: Optional[torch.LongTensor] = None,
+        aspect_ratio_mask: Optional[torch.Tensor] = None,
+        cross_attention_mask: Optional[torch.Tensor] = None,
+        labels: Optional[torch.LongTensor] = None,
+        preference_labels: Optional[torch.BoolTensor] = None,
+        pattern_params: Optional[Dict[int, torch.FloatTensor]] = None,
+        pattern_params_mask: Optional[Dict[int, torch.BoolTensor]] = None,
+        pattern_endpoints: Optional[torch.FloatTensor] = None,
+        pattern_endpoint_masks: Optional[torch.BoolTensor] = None,
+        pattern_transfs: Optional[torch.FloatTensor] = None,
+        pattern_transf_masks: Optional[torch.BoolTensor] = None,
+        past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        beta: Optional[float] = 2.0,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None
+    ):
+        # Following 65 lines are identical to `forward`. Make sure to unify code later!
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        if (input_ids is None) ^ (inputs_embeds is not None):
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+
+        if pixel_values is not None and inputs_embeds is not None:
+            raise ValueError(
+                "You cannot specify both pixel_values and inputs_embeds at the same time, and must specify either one"
+            )
+
+        if pixel_values is not None and cross_attention_states is not None:
+            raise ValueError("`pixel_values` and `cross_attention_states` cannot be provided simultaneously")
+
+        if pixel_values is not None:
+            if aspect_ratio_ids is None:
+                raise ValueError("`aspect_ratio_ids` must be provided if `pixel_values` is provided")
+            # get vision tokens from vision model
+            vision_outputs = self.vision_model(
+                pixel_values=pixel_values,
+                aspect_ratio_ids=aspect_ratio_ids,
+                aspect_ratio_mask=aspect_ratio_mask,
+                output_hidden_states=output_hidden_states,
+                output_attentions=output_attentions,
+                return_dict=return_dict,
+            )
+            cross_attention_states = vision_outputs[0]
+            cross_attention_states = self.multi_modal_projector(cross_attention_states).reshape(
+                -1, cross_attention_states.shape[-2], self.hidden_size
+            )
+
+        if cross_attention_mask is not None:
+            cross_attention_mask, full_text_row_masked_out_mask = _prepare_cross_attention_mask(
+                cross_attention_mask,
+                num_vision_tokens=self.vision_model.num_patches,
+                dtype=self.dtype,
+            )
+        else:
+            full_text_row_masked_out_mask = None
+
+        if cross_attention_mask is not None and cache_position is not None:
+            cross_attention_mask = cross_attention_mask[:, :, cache_position]
+            full_text_row_masked_out_mask = full_text_row_masked_out_mask[:, :, cache_position]
+        
+        if inputs_embeds is None:
+            inputs_embeds = self.get_input_embeddings()(input_ids)
+        if input_ids is not None and labels is not None:
+            transf_mask = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
+            edge_mask = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
+            if (edge_mask is not None and pattern_endpoints is not None and pattern_endpoint_masks is not None):
+                assert edge_mask.sum() == pattern_endpoint_masks.sum(), "edge mask has shape {} but endpoints mask has shape {}" \
+                    .format(edge_mask.sum(), pattern_endpoint_masks.sum())
+                _endpoints = pattern_endpoints[pattern_endpoint_masks]
+                edge_embeds = self.vertex_proj(self.vertex_encoding(_endpoints))
+                inputs_embeds[edge_mask] = inputs_embeds[edge_mask] + edge_embeds
+                    
+            if (transf_mask is not None and pattern_transfs is not None and pattern_transf_masks is not None):
+                assert transf_mask.sum() == pattern_transf_masks.sum()
+                _transformations = pattern_transfs[pattern_transf_masks]
+                transf_embeds = self.transf_proj(torch.cat([self.trasl_encoding(_transformations[:, :3]), _transformations[:, 3:]], dim=1))
+                inputs_embeds[transf_mask] = inputs_embeds[transf_mask] + transf_embeds
+
+        outputs = self.language_model(
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            cross_attention_states=cross_attention_states,
+            cross_attention_mask=cross_attention_mask,
+            full_text_row_masked_out_mask=full_text_row_masked_out_mask,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            inputs_embeds=inputs_embeds,
+            labels=None,
+            output_hidden_states=True,
+            output_attentions=output_attentions,
+            return_dict=return_dict,
+            cache_position=cache_position,
+            num_logits_to_keep=num_logits_to_keep,
+        )
+        ce_loss = None
+        logits = outputs.logits
+        total_loss = None
+        edge_type_losses = {}
+        edge_loss = None
+
+        # compute the pmpo loss for the language model
+        log_likelihood = -outputs.loss
+
+        preference_labels = preference_labels.to(log_likelihood.device)
+        pmpo_language_loss = -preference_labels * log_likelihood + beta * (1-preference_labels) * log_likelihood
+
+        # compute the pmpo loss for the regression
+
+        def compute_regression_log_prob(y, mu, sigma):
+            eps = 1e-6
+            sigma = max(sigma, eps)
+
+            log_prob = -0.5 * ((y - mu) ** 2 / sigma ** 2+ torch.log(2 * torch.pi * sigma**2))
+
+            return log_prob
+
+        pmpo_regression_loss = 0
+
+        last_hidden_state = outputs.hidden_states[-1]
+            param_preds = {k:torch.zeros_like(v) for k,v in pattern_params.items()}
+            if pattern_params_mask is not None:
+                edge_loss = 0
+                for edge_type, ind in self.config.get_all_edge_indices(ret_dict=True).items():
+                    mask = labels[..., 1:] == ind
+                    mask = torch.cat([mask, torch.zeros_like(mask)[..., :1]], dim=1)
+                    if not mask.any():
+                        edge_type_losses[f"{edge_type}_loss"] = torch.zeros(1).to(last_hidden_state.device)
+                        continue
+                    panel_embeds = last_hidden_state[mask]
+                    panel_params = self.regression_head(panel_embeds)
+                    if ind == self.config.cline_token_index:
+                        continue
+                    if ind == self.config.transf_token_index:
+                        # transf
+                        panel_params = panel_params[:, :7]
+                    elif ind == self.config.line_token_index:
+                        # line
+                        panel_params = panel_params[:, 7:9]
+                    elif ind == self.config.quadratic_token_index:
+                        # quadratic
+                        panel_params = panel_params[:, 7:11]
+                    elif ind == self.config.cubic_token_index:
+                        # cubic
+                        panel_params = panel_params[:, 7:13]
+                    elif ind == self.config.arc_token_index:
+                        # arc
+                        panel_params = torch.cat([panel_params[:, 7:9], panel_params[:, 13:15]], dim=-1)
+                    elif ind == self.config.cquadratic_token_index:
+                        # c_quadratic
+                        panel_params = panel_params[:, 9:11]
+                    elif ind == self.config.ccubic_token_index:
+                        # c_cubic
+                        panel_params = panel_params[:, 9:13]
+                    elif ind == self.config.carc_token_index:
+                        # c_arc
+                        panel_params = panel_params[:, 13:15]
+                        
+                    param_preds[ind][pattern_params_mask[ind]] = panel_params 
+                    edge_log_likelihood = compute_regression_log_prob(pattern_params[ind], param_preds[ind], self.config.sigma)
+
+                    pmpo_regression_loss += -preference_labels * edge_log_likelihood + beta * (1-preference_labels) * edge_log_likelihood
+
+        pmpo_loss = pmpo_language_loss + pmpo_regression_loss
+
+
+
     def prepare_inputs_for_generation(
         self,
         input_ids,
