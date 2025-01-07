@@ -202,7 +202,10 @@ class AIpparelMllamaCausalLMOutputWithPast(ModelOutput):
     params: Optional[Dict[int, torch.FloatTensor]] = None
     params_mask_dict: Optional[Dict[int, torch.BoolTensor]] = None
 
-
+@dataclass
+class AIpparelPMPOOutput(ModelOutput):
+    loss: Optional[torch.FloatTensor] = None
+    logits: torch.FloatTensor = None
 
 class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration):
     config_class = AIpparelMllamaNextConfig
@@ -625,7 +628,10 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         preference_labels = preference_labels.to(log_likelihood.device)
         pmpo_language_loss = -preference_labels * log_likelihood + beta * (1-preference_labels) * log_likelihood
 
-        # compute the pmpo loss for the regression
+        return AIpparelPMPOOutput(
+            loss=pmpo_language_loss,
+            logits=logits,
+        )
 
         def compute_regression_log_prob(y, mu, sigma):
             eps = 1e-6
