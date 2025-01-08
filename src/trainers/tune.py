@@ -1,0 +1,214 @@
+import os 
+import wandb as wb
+from omegaconf import OmegaConf
+import torch
+from trainers.convert_zero_to_torch import _get_fp32_state_dict_from_zero_checkpoint
+from trainers.utils import dict_to_cuda, AverageMeter, ProgressMeter
+import time
+import logging
+log = logging.getLogger(__name__)
+
+def _start_experiment(
+    cfg,
+    model,
+    ddp_rank,
+    ddp_world_size,
+    resume,
+    from_start
+):
+    # resume deepspeed checkpoint
+    os.environ['WANDB_DIR'] = cfg.wandb_info.wandb_dir
+    os.environ['WANDB_CACHE_DIR'] = cfg.wandb_info.wandb_cache_dir
+    if ddp_rank == 0:
+        config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+        wb.init(
+            name=cfg.run_name, project=cfg.project, config=config, 
+            resume='allow', id=cfg.run_id,    # Resuming functionality
+            dir=cfg.run_local_path
+        )
+    start_step = 0
+    if resume:
+        latest_path = os.path.join(resume, 'latest')
+        if os.path.isfile(latest_path):
+            with open(latest_path, 'r') as fd:
+                tag = fd.read().strip()
+        else:
+            raise ValueError(f"Unable to find 'latest' file at {latest_path}")
+
+        ds_checkpoint_dir = os.path.join(resume, tag)
+        if from_start or (os.path.isdir(ds_checkpoint_dir) and len(os.listdir(ds_checkpoint_dir)) != ddp_world_size + 1):
+            state_dict = _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, True)
+            model.module.load_state_dict(state_dict, strict=False)
+        else:
+            load_path, client_state = model.load_checkpoint(resume)
+            
+        with open(os.path.join(resume, "latest"), "r") as f:
+            ckpt_dir = f.readlines()[0].strip()
+        if not from_start:
+            start_step = (
+                int(ckpt_dir.replace("global_step", ""))
+            )
+        if ddp_rank == 0:
+            log.info(
+                "resume training from {}, start from epoch {}".format(
+                    resume, start_step
+                )
+            )
+    if ddp_rank == 0:
+        wb.watch(model, log='all')
+    return start_step
+
+def tune(
+    cfg,
+    model, 
+    optimizer, 
+    loader, 
+    scheduler, 
+    garment_tokenizer,
+    ddp_rank,
+    ddp_world_size,
+    log_dir):
+    """Fit provided model to reviosly configured dataset"""
+    
+    start_step = _start_experiment(
+        cfg, 
+        model, 
+        ddp_rank, 
+        ddp_world_size,
+        cfg.resume,
+        cfg.from_start)
+    _fit_loop(
+        model, 
+        optimizer, 
+        loader, 
+        scheduler, 
+        garment_tokenizer, 
+        ddp_rank,
+        ddp_world_size,
+        log_dir, 
+        cfg.precision, 
+        cfg.grad_accumulation_steps, 
+        cfg.num_steps, 
+        start_step,
+        cfg.save_freq)
+    if ddp_rank == 0: 
+        log.info("Finished training")
+        
+        
+def _fit_loop(
+    model, 
+    optimizer, 
+    loader, 
+    scheduler, 
+    garment_tokenizer,
+    ddp_rank,
+    ddp_world_size,
+    log_dir,
+    precision,
+    grad_accumulation_steps,
+    num_steps, 
+    start_step,
+    save_freq):
+    loader_iter = iter(loader)
+    mode_names = loader.dataset.get_mode_names()
+    cast_dtype = torch.half if precision == "fp16" else (torch.bfloat16 if precision == "bf16" else torch.float32)
+    batch_time = AverageMeter("Time", ":6.3f")
+    data_time = AverageMeter("Data", ":6.3f")
+    losses = AverageMeter("Total Loss", ":.4f")
+    modewise_total_losses = [AverageMeter(f"{mode} Total Loss", ":.4f") for mode in mode_names]
+    ce_losses = AverageMeter("CE Loss", ":.4f")
+    modewise_ce_losses = [AverageMeter(f"{mode} CE Loss", ":.4f") for mode in mode_names]
+    all_meters = [batch_time, data_time, losses, ce_losses] + modewise_total_losses + modewise_ce_losses
+    edge_losses = AverageMeter("Edge Loss", ":.4f")
+    modewise_edge_losses = [AverageMeter(f"{mode} Edge Loss", ":.4f") for mode in mode_names]
+    all_meters += modewise_edge_losses
+    edge_type_losses = {garment_tokenizer.panel_edge_type_indices.get_index_token(ind).value: AverageMeter(f"{garment_tokenizer.panel_edge_type_indices.get_index_token(ind).value} Loss", ":.4f") for ind in garment_tokenizer.panel_edge_type_indices.get_all_indices()}
+    all_meters += [edge_losses]
+    progress = ProgressMeter(
+        log, 
+        ddp_rank, 
+        1,
+        all_meters,
+        prefix="Step:",
+    )
+    model.train()
+    if ddp_rank == 0:
+        log.info("Start Training...")
+    for step in range(start_step, num_steps):
+        last_step = (step == num_steps - 1)
+        for i in range(grad_accumulation_steps):
+            end = time.time()
+            try:
+                input_dict = next(loader_iter)
+            except:
+                loader_iter = iter(loader)
+                input_dict = next(loader_iter)
+            
+            data_time.update(time.time() - end)
+            
+            input_dict = dict_to_cuda(input_dict)
+            
+            input_dict["pixel_values"] = input_dict["pixel_values"].to(cast_dtype)
+            B = input_dict["pixel_values"].size(0)
+            for k in input_dict["pattern_params"].keys():
+                input_dict["pattern_params"][k] = input_dict["pattern_params"][k].to(cast_dtype)
+            input_dict["pattern_endpoints"] = input_dict["pattern_endpoints"].to(cast_dtype)
+            input_dict["pattern_transfs"] = input_dict["pattern_transfs"].to(cast_dtype)
+            
+            output = model.pmpo_forward(
+                input_ids=input_dict["input_ids"],
+                pixel_values=input_dict["pixel_values"],
+                attention_mask=input_dict["attention_mask"],
+                aspect_ratio_ids=input_dict["aspect_ratio_ids"],
+                aspect_ratio_mask=input_dict["aspect_ratio_mask"],
+                cross_attention_mask=input_dict["cross_attention_mask"],
+                labels=input_dict["labels"],
+                pattern_params=input_dict["pattern_params"],
+                pattern_params_mask=input_dict["pattern_params_mask"],
+                pattern_endpoints=input_dict["pattern_endpoints"],
+                pattern_endpoint_masks=input_dict["pattern_endpoint_masks"],
+                pattern_transfs=input_dict["pattern_transfs"],
+                pattern_transf_masks=input_dict["pattern_transf_masks"],
+            )
+            loss = output.loss
+            model.backward(loss.mean())
+            model.step()
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            losses.update(loss.mean(), B)
+        
+        # logging
+        if ddp_world_size > 1:
+            batch_time.all_reduce()
+            data_time.all_reduce()
+            losses.all_reduce()
+
+            if ddp_rank == 0:
+                progress.display(step + 1)
+                log_dict = {
+                    "train/loss": losses.avg,
+                    "train/ce_loss": ce_losses.avg,
+                    "train/batch_time": batch_time.avg,
+                    "train/data_time": data_time.avg,
+                }
+                log_dict["train/edge_loss"] = edge_losses.avg
+                for k, meter in edge_type_losses.items():
+                    log_dict[f"train/{k}_loss"] = meter.avg
+                for k, mode in enumerate(mode_names):
+                    log_dict[f"train/{mode}_loss"] = modewise_total_losses[i].avg
+                    log_dict[f"train/{mode}_ce_loss"] = modewise_ce_losses[i].avg
+                    log_dict[f"train/{mode}_edge_loss"] = modewise_edge_losses[i].avg
+                wb.log(log_dict, step=step)
+
+                batch_time.reset()
+                data_time.reset()
+                losses.reset()
+
+            if step != 0:
+                curr_lr = scheduler.get_last_lr()
+                if ddp_rank == 0:
+                    wb.log({"train/lr": curr_lr[0]}, step)
+            
+            
+        if (step % save_freq == 0) or last_step:
+            model.save_checkpoint(os.path.join(log_dir, f"ckpt_{step}"))
