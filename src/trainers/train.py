@@ -225,17 +225,17 @@ def _fit_loop(
                     log_dict[f"train/{mode}_edge_loss"] = modewise_edge_losses[i].avg
                 wb.log(log_dict, step=step)
 
-                batch_time.reset()
-                data_time.reset()
-                losses.reset()
-                ce_losses.reset()
-                for k, mode in enumerate(mode_names):
-                    modewise_total_losses[k].reset()
-                    modewise_ce_losses[k].reset()
-                    modewise_edge_losses[k].reset()
-                edge_losses.reset()
-                for k, meter in edge_type_losses.items():
-                    meter.reset()
+            batch_time.reset()
+            data_time.reset()
+            losses.reset()
+            ce_losses.reset()
+            for k, mode in enumerate(mode_names):
+                modewise_total_losses[k].reset()
+                modewise_ce_losses[k].reset()
+                modewise_edge_losses[k].reset()
+            edge_losses.reset()
+            for k, meter in edge_type_losses.items():
+                meter.reset()
         
             if step != 0:
                 curr_lr = scheduler.get_last_lr()
