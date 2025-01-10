@@ -243,5 +243,5 @@ def _fit_loop(
                     wb.log({"train/lr": curr_lr[0]}, step)
             
             
-        if (step % save_freq == 0) or last_step:
+        if (step % save_freq == 0 and step > 0) or last_step:
             model.save_checkpoint(os.path.join(log_dir, f"ckpt_{step}"))
