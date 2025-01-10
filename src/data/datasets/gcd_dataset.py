@@ -139,7 +139,7 @@ class GarmentCodeData(Dataset):
                 question_template = random.choice(self.short_question_list)
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
-                answers.append([{"type": "image"}, {"type": "text", "text": answer_template}])
+                answers.append([{"type": "text", "text": answer_template}])
             out_pattern = [gt_pattern]
         elif sample_type == 1:
             # descriptive text_only
@@ -151,7 +151,7 @@ class GarmentCodeData(Dataset):
                 question_template = random.choice(self.descriptive_text_question_list).format(sent=descriptive_text)
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
-                answers.append([{"type": "image"}, {"type": "text", "text": answer_template}])
+                answers.append([{"type": "text", "text": answer_template}])
             out_pattern = [gt_pattern]
         elif sample_type == 2:
             # speculative text_only
@@ -163,7 +163,7 @@ class GarmentCodeData(Dataset):
                 question_template = random.choice(self.speculative_text_question_list).format(sent=speculative_text)
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
-                answers.append([{"type": "image"}, {"type": "text", "text": answer_template}])
+                answers.append([{"type": "text", "text": answer_template}])
             out_pattern = [gt_pattern]
         elif sample_type == 3:
             # image_text
@@ -176,7 +176,7 @@ class GarmentCodeData(Dataset):
                 question_template = random.choice(self.text_image_question_list).format(sent=descriptive_text)
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
-                answers.append([{"type": "image"}, {"type": "text", "text": answer_template}])
+                answers.append([{"type": "text", "text": answer_template}])
             out_pattern = [gt_pattern]
         elif sample_type == 4:
             # garment_editing
@@ -199,7 +199,7 @@ class GarmentCodeData(Dataset):
                 question_template = random.choice(self.editing_question_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN, sent=editing_text)
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
-                answers.append([{"type": "image"}, {"type": "text", "text": answer_template}])
+                answers.append([{"type": "text", "text": answer_template}])
 
         # dialog = [{"role":"system","content":[{"type": "text", "text": system_prompt}]}]
         dialog = []
