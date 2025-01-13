@@ -93,6 +93,9 @@ class AverageMeter(object):
         self.count = 0
 
     def update(self, val, n=1):
+        val = val.item() if isinstance(val, torch.Tensor) and val.dim() == 0 else val
+        n = n.item() if isinstance(n, torch.Tensor) and n.dim() == 0 else n
+
         self.val = val
         self.sum += val * n
         self.count += n
