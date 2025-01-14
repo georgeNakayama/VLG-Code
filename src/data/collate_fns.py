@@ -113,6 +113,80 @@ def collate_fn(
     return_dict.update(input_batch)
     return return_dict
 
+def vqa_collate_fn(
+    batch,
+    processor: AutoProcessor,
+    model_version: Literal[
+        "llava-hf/llava-v1.6-mistral-7b-hf",
+        "meta-llama/Llama-3.2-11B-Vision-Instruct"
+    ],
+):
+    """
+    Collate function for VQA dataset that processes batches of data.
+    
+    Args:
+        batch: List of tuples containing (image_path, image, dialog, question, ground_truth).
+        processor: The processor for tokenization and image processing.
+        model_version: The version of the model being used.
+
+    Returns:
+        A dictionary containing processed inputs and labels for training.
+    """
+    # Initialize lists to store batched data
+    image_path_list = []
+    images_list = []
+    combined_text_list = []
+    ground_truth_list = []
+
+    # Process each sample in the batch
+    for image_path, image, dialog, question, ground_truth in batch:
+        image_path_list.append(image_path)
+        images_list.append(image)
+
+        # Format dialog into a single string
+        dialog_text = ""
+        for d in dialog:
+            if d["role"] == "user":
+                dialog_text += f"Human: {d['content']}\n"
+            else:
+                dialog_text += f"Assistant: {d['content']}\n"
+
+        # Concatenate dialog and the current question
+        question_text = question[0]["content"]
+        combined_text = f"{dialog_text}Human: {question_text}\nAssistant:"
+        combined_text_list.append(combined_text)
+
+        # Append the ground truth (answer)
+        ground_truth_list.append(ground_truth[0])
+
+    # Process text and images using the processor
+    input_batch = processor(
+        images=images_list,
+        text=combined_text_list,
+        return_tensors="pt",
+        padding=True
+    )
+
+    # Construct labels for loss computation
+    labels = construct_labels(
+        input_batch["input_ids"], 
+        processor, 
+        model_version, 
+    )
+    input_len = input_batch["input_ids"].shape[1] 
+
+    # Return the collated batch
+    return {
+        "input_len": input_len,
+        "image_paths": image_path_list,
+        "images": input_batch["pixel_values"],
+        "input_ids": input_batch["input_ids"],
+        "attention_mask": input_batch["attention_mask"],
+        "labels": labels,
+        "ground_truth": ground_truth_list,
+    }
+
+
 def construct_labels(
     input_ids: torch.LongTensor, 
     processor: AutoProcessor,
