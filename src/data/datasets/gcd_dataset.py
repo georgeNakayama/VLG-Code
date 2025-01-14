@@ -122,7 +122,7 @@ class GarmentCodeData(Dataset):
             self.gt_cached[data_name] = (gt_pattern, edited_pattern, editing_captions, captions)
             
             
-        image = torch.zeros((3, 224, 224))
+        image = torch.zeros((3, 800, 800))
         image_path = ''
         sample_type = np.random.choice(5, p=self.sampling_rate)
         if sample_type == 4 and edited_pattern is None:
@@ -161,7 +161,7 @@ class GarmentCodeData(Dataset):
             answers = []
             for i in range(1):
                 question_template = random.choice(self.speculative_text_question_list).format(sent=speculative_text)
-                questions.append([{"type": "text", "text": question_template}])
+                questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
                 answers.append([{"type": "text", "text": answer_template}])
             out_pattern = [gt_pattern]
@@ -197,7 +197,7 @@ class GarmentCodeData(Dataset):
             answers = []
             for i in range(1):
                 question_template = random.choice(self.editing_question_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN, sent=editing_text)
-                questions.append([{"type": "text", "text": question_template}])
+                questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
                 answers.append([{"type": "text", "text": answer_template}])
 
