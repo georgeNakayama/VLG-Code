@@ -26,6 +26,7 @@ class LLaVAInstruct(torch.utils.data.Dataset):
     
     def _parepare_image(self, image_path: str):
         """Fetch the image for the given index"""
+        # assert os.path.exists(image_path), f"The path is not there {image_path}"
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
@@ -70,7 +71,7 @@ class LLaVAInstruct(torch.utils.data.Dataset):
 
         self._is_correct_conversation(conversation)
         for conversation_part in conversation[:-2]:
-            if conversation["from"] == "human":
+            if conversation_part["from"] == "human":
                 dialog.append({"role": "user", "content": conversation_part["value"]})
             else:
                 dialog.append({"role": "assistant", "content": conversation_part["value"]})

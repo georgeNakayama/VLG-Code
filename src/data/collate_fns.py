@@ -22,9 +22,9 @@ def collate_fn(
     garment_tokenizer: Optional[GarmentTokenizer]=None, 
     model_version: Literal["llava-hf/llava-v1.6-mistral-7b-hf", "meta-llama/Llama-3.2-11B-Vision-Instruct"]="llava-hf/llava-v1.6-mistral-7b-hf"
 ):
-
+    batch = batch[0]
     for b in batch:
-        assert len(b) == 6, f"This element is of {b}"
+        assert len(b) == 6, f"The element is of length {len(b)}"
     # Execute vqa when needed
     if batch[0][-1] == -1:
         return vqa_collate_fn(batch, processor, model_version)
@@ -146,7 +146,7 @@ def vqa_collate_fn(
     ground_truth_list = []
 
     # Process each sample in the batch
-    for image_path, image, dialog, question, ground_truth in batch:
+    for image_path, image, dialog, question, ground_truth, _ in batch:
         image_path_list.append(image_path)
         images_list.append(image)
 
