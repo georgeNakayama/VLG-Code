@@ -1,0 +1,4 @@
+_target_: data.datasets.vqa.LLaVAInstruct
+
+data_file_path: /scratch/m000043/garmentcodedata
+image_root_path: /scratch/m000043/garmentcodedata_editing
