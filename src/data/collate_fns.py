@@ -22,6 +22,9 @@ def collate_fn(
     garment_tokenizer: Optional[GarmentTokenizer]=None, 
     model_version: Literal["llava-hf/llava-v1.6-mistral-7b-hf", "meta-llama/Llama-3.2-11B-Vision-Instruct"]="llava-hf/llava-v1.6-mistral-7b-hf"
 ):
+
+    for b in batch:
+        assert len(b) == 6, f"This element is of {b}"
     # Execute vqa when needed
     if batch[0][-1] == -1:
         return vqa_collate_fn(batch, processor, model_version)
