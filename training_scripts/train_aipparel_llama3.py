@@ -30,7 +30,7 @@ class MainConfig:
     precision: Literal["bf16", "fp16"] = "bf16"
     eval_only: bool = False
     gen_only: bool = False
-    gen_split: Literal["train", "val"] = "train"
+    gen_split: Literal["train", "val"] = "val"
     resume: Optional[str] = None
     from_start: bool = False
     grad_accumulation_steps: int = 1
