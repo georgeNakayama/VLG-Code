@@ -95,7 +95,7 @@ class LLaVAInstruct(torch.utils.data.Dataset):
             else:
                 dialog.append({"role": "assistant", "content": conversation_part["value"]})
 
-        question.append({"role": "user", "content": conversation[-2]["value"]})
+        question.append({"role": "user", "content": f"<image> {conversation[-2]['value']}"})
         ground_truth = [conversation[-1]["value"]]
 
         return (
