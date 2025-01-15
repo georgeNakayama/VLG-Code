@@ -183,7 +183,7 @@ def vqa_collate_fn(
     return_dict =  {
         "input_len": input_len,
         "image_paths": image_path_list,
-        "images": input_batch["pixel_values"],
+        "sample_type": torch.LongTensor([-1] * len(batch)),
         "labels": labels,
         "pattern_params": None,
         "pattern_params_mask": None,
