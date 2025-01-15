@@ -24,8 +24,8 @@ train_dataset = GarmentCodeData(
     sampling_rate=[1,0,0,0,0],
     split_file="/home/w4756677/garment/AIpparel-Code/assets/data_configs/garmentcodedata_datasplit.json",
     datalist_file="assets/data_configs/garmentcodedata_list.txt",
-    body_type="default_body",
     panel_classification="assets/data_configs/panel_classes_garmentcodedata.json",
+    body_type="default_body",
     split="train"
 )
 val_dataset = GarmentCodeData(
@@ -36,8 +36,8 @@ val_dataset = GarmentCodeData(
     sampling_rate=[1,0,0,0,0],
     split_file="/home/w4756677/garment/AIpparel-Code/assets/data_configs/garmentcodedata_datasplit.json",
     datalist_file="assets/data_configs/garmentcodedata_list.txt",
-    body_type="default_body",
     panel_classification="assets/data_configs/panel_classes_garmentcodedata.json",
+    body_type="default_body",
     split="val"
 )
 

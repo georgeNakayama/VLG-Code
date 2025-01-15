@@ -49,8 +49,8 @@ class GarmentCodeData(Dataset):
         datalist_file: str,
         editing_flip_prob: float,
         split_file: str,
-        body_type: Literal['default_body'],
         panel_classification: Optional[str] = None,
+        body_type: Literal["default_body", "random_body"] = "default_body",
         split: Literal["train", "val"] = "train"
         ): 
 
@@ -78,6 +78,7 @@ class GarmentCodeData(Dataset):
                 
         self.panel_classifier = PanelClasses(classes_file=panel_classification)
         self.panel_classes = self.panel_classifier.classes
+        self.body_type = body_type
 
         print("The panel classes in this dataset are :", self.panel_classes)
         
@@ -148,7 +149,7 @@ class GarmentCodeData(Dataset):
             
             self.gt_cached[data_name] = (gt_pattern, edited_pattern, editing_captions, captions)
             
-        use_random_body = bool(random.choice([True, False]))
+        use_random_body = self.body_type == "random_body" and bool(random.choice([True, False]))
         if use_random_body and gt_pattern.random_pattern is None:
             use_random_body = False
 
