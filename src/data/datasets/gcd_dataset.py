@@ -32,7 +32,7 @@ class SampleType(enum.Enum):
 @dataclasses.dataclass
 class GroundTruthPattern():
     default_pattern: NNSewingPattern
-    random_pattern: NNSewingPattern
+    random_pattern: Optional[NNSewingPattern]
 
 ## incorperating the changes from maria's three dataset classes into a new
 ## dataset class. this also includes features from sewformer, for interoperability
@@ -87,7 +87,7 @@ class GarmentCodeData(Dataset):
         """Number of entries in the dataset"""
         return len(self.datapoints_names)  
     
-    def _parepare_image(self, image_paths):
+    def _prepare_image(self, image_paths):
         """Fetch the image for the given index"""
         image_path = random.choice(image_paths)
         image = cv2.imread(image_path)
@@ -119,8 +119,11 @@ class GarmentCodeData(Dataset):
             default_gt_pattern.name = data_name
 
             random_spec_file = str(default_spec_file).replace("default_body", "random_body")
-            random_gt_pattern = NNSewingPattern(random_spec_file, panel_classifier=self.panel_classifier, template_name=data_name)
-            random_gt_pattern.name = data_name
+            if not os.path.exists(random_spec_file):
+                random_gt_pattern = None
+            else:
+                random_gt_pattern = NNSewingPattern(random_spec_file, panel_classifier=self.panel_classifier, template_name=data_name)
+                random_gt_pattern.name = data_name
 
             gt_pattern = GroundTruthPattern(default_gt_pattern, random_gt_pattern)
             
@@ -143,6 +146,8 @@ class GarmentCodeData(Dataset):
             self.gt_cached[data_name] = (gt_pattern, edited_pattern, editing_captions, captions)
             
         use_random_body = bool(random.choice([True, False]))
+        if use_random_body and gt_pattern.random_pattern is None:
+            use_random_body = False
 
         if use_random_body:
             image_paths = [str(path).replace("default_body", "random_body") for path in image_paths]
@@ -156,7 +161,7 @@ class GarmentCodeData(Dataset):
             sample_type = SampleType.IMAGE  # no text if there is no caption
         if sample_type == SampleType.IMAGE:
             # image_only
-            image, image_path = self._parepare_image(image_paths)
+            image, image_path = self._prepare_image(image_paths)
             # questions and answers
             questions = []
             answers = []
@@ -193,7 +198,7 @@ class GarmentCodeData(Dataset):
         elif sample_type == SampleType.IMAGE_AND_TEXT:
             # image_text
             descriptive_text = captions['description']
-            image, image_path = self._parepare_image(image_paths)
+            image, image_path = self._prepare_image(image_paths)
             # questions and answers
             questions = []
             answers = []
