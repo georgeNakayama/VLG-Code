@@ -1,12 +1,15 @@
-import numpy as np
+import dataclasses
+import enum
+import json
 import os
+import random
+from typing import List, Dict, Tuple, Union, Optional, Literal
+
+import cv2
+import numpy as np
 from pathlib import Path
 import torch
 from torch.utils.data import Dataset
-from typing import List, Dict, Tuple, Union, Optional, Literal
-import cv2
-import random
-import json
 # My
 from data.patterns.gcd_pattern.pattern_converter import NNSewingPattern
 from data.patterns.gcd_pattern.panel_classes import PanelClasses
@@ -18,6 +21,21 @@ from .utils import (SHORT_QUESTION_LIST,
                     SHORT_QUESTION_WITH_TEXT_LIST,
                     EDITING_QUESTION_LIST
                     )
+
+class SampleType(enum.Enum):
+    IMAGE= 0
+    DESC_TEXT= 1
+    SPEC_TEXT= 2
+    IMAGE_AND_TEXT = 3
+    EDIT = 4
+
+    def __int__(self):
+        return self.value
+
+@dataclasses.dataclass
+class GroundTruthPattern():
+    default_pattern: NNSewingPattern
+    random_pattern: Optional[NNSewingPattern]
 
 ## incorperating the changes from maria's three dataset classes into a new
 ## dataset class. this also includes features from sewformer, for interoperability
@@ -31,8 +49,8 @@ class GarmentCodeData(Dataset):
         datalist_file: str,
         editing_flip_prob: float,
         split_file: str,
-        body_type: Literal['default_body'],
         panel_classification: Optional[str] = None,
+        body_type: Literal["default_body", "random_body"] = "default_body",
         split: Literal["train", "val"] = "train"
         ): 
 
@@ -60,6 +78,7 @@ class GarmentCodeData(Dataset):
                 
         self.panel_classifier = PanelClasses(classes_file=panel_classification)
         self.panel_classes = self.panel_classifier.classes
+        self.body_type = body_type
 
         print("The panel classes in this dataset are :", self.panel_classes)
         
@@ -72,7 +91,7 @@ class GarmentCodeData(Dataset):
         """Number of entries in the dataset"""
         return len(self.datapoints_names)  
     
-    def _parepare_image(self, image_paths):
+    def _prepare_image(self, image_paths):
         """Fetch the image for the given index"""
         image_path = random.choice(image_paths)
         image = cv2.imread(image_path)
@@ -99,9 +118,18 @@ class GarmentCodeData(Dataset):
         if data_name in self.gt_cached:
             gt_pattern, edited_pattern, editing_captions, captions = self.gt_cached[data_name]
         else:
-            spec_file = os.path.join(self.root_path, datapoint_name, f'{data_name}_specification_shifted.json')
-            gt_pattern = NNSewingPattern(spec_file, panel_classifier=self.panel_classifier, template_name=data_name)
-            gt_pattern.name = data_name
+            default_spec_file = os.path.join(self.root_path, datapoint_name, f'{data_name}_specification_shifted.json')
+            default_gt_pattern = NNSewingPattern(default_spec_file, panel_classifier=self.panel_classifier, template_name=data_name)
+            default_gt_pattern.name = data_name
+
+            random_spec_file = str(default_spec_file).replace("default_body", "random_body")
+            if not os.path.exists(random_spec_file):
+                random_gt_pattern = None
+            else:
+                random_gt_pattern = NNSewingPattern(random_spec_file, panel_classifier=self.panel_classifier, template_name=data_name)
+                random_gt_pattern.name = data_name
+
+            gt_pattern = GroundTruthPattern(default_gt_pattern, random_gt_pattern)
             
             editing_spec_file = os.path.join(self.editing_dir, data_name, f'edited_specification.json')
             editing_caption_json = os.path.join(self.editing_dir, data_name, f'editing_caption.json')
@@ -121,17 +149,23 @@ class GarmentCodeData(Dataset):
             
             self.gt_cached[data_name] = (gt_pattern, edited_pattern, editing_captions, captions)
             
+        use_random_body = self.body_type == "random_body" and bool(random.choice([True, False]))
+        if use_random_body and gt_pattern.random_pattern is None:
+            use_random_body = False
+
+        if use_random_body:
+            image_paths = [str(path).replace("default_body", "random_body") for path in image_paths]
             
         image = torch.zeros((3, 800, 800))
         image_path = ''
-        sample_type = np.random.choice(5, p=self.sampling_rate)
-        if sample_type == 4 and edited_pattern is None:
-            sample_type = 0  # no editing if there is no edited pattern
-        if (sample_type in [1, 2, 3]) and captions is None:
-            sample_type = 0  # no text if there is no caption
-        if sample_type == 0:
+        sample_type = np.random.choice(list(SampleType), p=self.sampling_rate)
+        if sample_type == SampleType.EDIT and edited_pattern is None:
+            sample_type = SampleType.IMAGE  # no editing if there is no edited pattern
+        if (sample_type in [SampleType.DESC_TEXT, SampleType.SPEC_TEXT, SampleType.IMAGE_AND_TEXT]) and captions is None:
+            sample_type = SampleType.IMAGE  # no text if there is no caption
+        if sample_type == SampleType.IMAGE:
             # image_only
-            image, image_path = self._parepare_image(image_paths)
+            image, image_path = self._prepare_image(image_paths)
             # questions and answers
             questions = []
             answers = []
@@ -140,8 +174,8 @@ class GarmentCodeData(Dataset):
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
                 answers.append([{"type": "text", "text": answer_template}])
-            out_pattern = [gt_pattern]
-        elif sample_type == 1:
+            out_pattern = [gt_pattern.random_pattern if use_random_body else gt_pattern.default_pattern]
+        elif sample_type == SampleType.DESC_TEXT:
             # descriptive text_only
             descriptive_text = captions['description']
             # questions and answers
@@ -152,8 +186,8 @@ class GarmentCodeData(Dataset):
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
                 answers.append([{"type": "text", "text": answer_template}])
-            out_pattern = [gt_pattern]
-        elif sample_type == 2:
+            out_pattern = [gt_pattern.default_pattern]
+        elif sample_type == SampleType.SPEC_TEXT:
             # speculative text_only
             speculative_text = captions['occasion']
             # questions and answers
@@ -164,11 +198,11 @@ class GarmentCodeData(Dataset):
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
                 answers.append([{"type": "text", "text": answer_template}])
-            out_pattern = [gt_pattern]
-        elif sample_type == 3:
+            out_pattern = [gt_pattern.default_pattern]
+        elif sample_type == SampleType.IMAGE_AND_TEXT:
             # image_text
             descriptive_text = captions['description']
-            image, image_path = self._parepare_image(image_paths)
+            image, image_path = self._prepare_image(image_paths)
             # questions and answers
             questions = []
             answers = []
@@ -177,16 +211,16 @@ class GarmentCodeData(Dataset):
                 questions.append([{"type": "image"}, {"type": "text", "text": question_template}])
                 answer_template = random.choice(self.answer_list).format(pattern=DEFAULT_PLACEHOLDER_TOKEN)
                 answers.append([{"type": "text", "text": answer_template}])
-            out_pattern = [gt_pattern]
-        elif sample_type == 4:
+            out_pattern = [gt_pattern.random_pattern if use_random_body else gt_pattern.default_pattern]
+        elif sample_type == SampleType.EDIT:
             # garment_editing
             if random.random() > self.editing_flip_prob:
-                before_pattern = gt_pattern
+                before_pattern = gt_pattern.default_pattern
                 after_pattern = edited_pattern
                 editing_text = editing_captions['editing_description_forward']
             else:
                 before_pattern = edited_pattern
-                after_pattern = gt_pattern
+                after_pattern = gt_pattern.default_pattern
                 editing_text = editing_captions['editing_description_reverse']
                 
             before_pattern.name = "before_" + before_pattern.name
@@ -217,7 +251,7 @@ class GarmentCodeData(Dataset):
             dialog,
             question,
             out_pattern,
-            sample_type,
+            int(sample_type),
         ) 
         
     def evaluate_patterns(self, pred_patterns: List[NNSewingPattern], gt_patterns: List[NNSewingPattern]):
