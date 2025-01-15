@@ -2,6 +2,7 @@ import os
 import wandb as wb
 from omegaconf import OmegaConf
 import torch
+from trainers.convert_zero_to_torch import _get_fp32_state_dict_from_zero_checkpoint
 from trainers.utils import dict_to_cpu, dict_to_dtype, AverageMeter
 import time
 import logging
@@ -9,6 +10,51 @@ import torch.distributed as dist
 from PIL import Image
 import numpy as np 
 log = logging.getLogger(__name__)
+
+def _start_experiment(
+    cfg,
+    model,
+    ddp_rank,
+    ddp_world_size,
+    resume,
+    from_start
+):
+    # resume deepspeed checkpoint
+    os.environ['WANDB_DIR'] = cfg.wandb_info.wandb_dir
+    os.environ['WANDB_CACHE_DIR'] = cfg.wandb_info.wandb_cache_dir
+    if ddp_rank == 0:
+        config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+        wb.init(
+            name=cfg.run_name, project=cfg.project, config=config, 
+            resume='allow', id=cfg.run_id,    # Resuming functionality
+            dir=cfg.run_local_path
+        )
+    if resume:
+        latest_path = os.path.join(resume, 'latest')
+        if os.path.isfile(latest_path):
+            with open(latest_path, 'r') as fd:
+                tag = fd.read().strip()
+        else:
+            raise ValueError(f"Unable to find 'latest' file at {latest_path}")
+
+        ds_checkpoint_dir = os.path.join(resume, tag)
+        state_dict = _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, True)
+        model.load_state_dict(state_dict)
+            
+        with open(os.path.join(resume, "latest"), "r") as f:
+            ckpt_dir = f.readlines()[0].strip()
+        start_step = (
+            int(ckpt_dir.replace("global_step", ""))
+        )
+        if ddp_rank == 0:
+            log.info(
+                "resume training from {}, start from epoch {}".format(
+                    resume, start_step
+                )
+            )
+    if ddp_rank == 0:
+        wb.watch(model, log='all')
+    return start_step
 
 @torch.no_grad()
 def generate(
@@ -23,6 +69,13 @@ def generate(
     gen_num=-1):
     if gen_num == -1:
         gen_num = len(loader)
+    assert cfg.resume is not None, "Need a checkpoint path"
+    step = _start_experiment(
+        cfg, 
+        model, 
+        ddp_rank, 
+        ddp_world_size,
+        cfg.resume)
     
     mode_names = loader.dataset.get_mode_names()
     model.eval()
@@ -162,6 +215,7 @@ def generate(
         dist.all_reduce(total_rots_l2, dist.ReduceOp.AVG)
         if ddp_rank == 0:
             log.info(
+                "Step: {:03d}\t"
                 "Sample: {:.3f} ({:.3f})\t"
                 "Num Panel Accuracy: {:.8f}\t"
                 "Num Edge Accuracy: {:.8f}\t"
@@ -170,6 +224,7 @@ def generate(
                 "translation L2: {:.8f}\t"
                 "rotation L2: {:.8f}\t"
                 "stitch acc: {:.8f}\t".format(
+                    step,
                     eval_sample_time.val,
                     eval_sample_time.avg,
                     total_panel_accs.cpu().item(),
@@ -201,4 +256,4 @@ def generate(
                     f"val/{mode}_rotation_L2": modewise_rots_l2s[mode].cpu().item(),
                     f"val/{mode}_stitch_acc": modewise_stitch_accs[mode].cpu().item(),
                 })
-            wb.log(log_dict, step=0)
+            wb.log(log_dict, step=step)
