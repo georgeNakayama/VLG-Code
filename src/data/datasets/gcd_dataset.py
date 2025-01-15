@@ -29,6 +29,9 @@ class SampleType(enum.Enum):
     IMAGE_AND_TEXT = 3
     EDIT = 4
 
+    def __int__(self):
+        return self.value
+
 @dataclasses.dataclass
 class GroundTruthPattern():
     default_pattern: NNSewingPattern
@@ -247,7 +250,7 @@ class GarmentCodeData(Dataset):
             dialog,
             question,
             out_pattern,
-            sample_type,
+            int(sample_type),
         ) 
         
     def evaluate_patterns(self, pred_patterns: List[NNSewingPattern], gt_patterns: List[NNSewingPattern]):
