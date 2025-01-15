@@ -21,6 +21,14 @@ class BatchWeightedDataset(Dataset):
 
     def __len__(self):
         return self.total_batches
+    
+    def __getattr__(self, name):
+        if hasattr(self.dataset_a, name):
+           return getattr(self.dataset_a, name)
+        elif hasattr(self.dataset_b, name):
+           return getattr(self.dataset_b, name)
+        else:
+           raise Exception("None of the datasets implements this function!")
 
     def __getitem__(self, idx):
         # Decide which dataset to sample from for the batch
