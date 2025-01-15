@@ -16,11 +16,13 @@ import tqdm
 import transformers
 from typing import Optional
 from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
 
 from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
 from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
 from data.collate_fns import collate_fn
 from trainers.train import train
+from trainers.generate import generate
 
 @dataclass
 class MainConfig:
@@ -28,6 +30,7 @@ class MainConfig:
     precision: Literal["bf16", "fp16"] = "bf16"
     eval_only: bool = False
     gen_only: bool = False
+    gen_split: Literal["train", "val"] = "train"
     resume: Optional[str] = None
     from_start: bool = False
     grad_accumulation_steps: int = 1
@@ -146,7 +149,57 @@ def main(cfg: MainConfig):
     if cfg.eval_only:
         pass
     elif cfg.gen_only:
-        pass
+        if cfg.gen_split == "train":
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset_train, shuffle=False, drop_last=False
+            )
+            loader = DataLoader(
+                dataset_train,
+                batch_size=1,
+                shuffle=False,
+                num_workers=12,
+                pin_memory=False,
+                sampler=sampler,
+                collate_fn=partial(
+                    collate_fn,
+                    processor=processor,
+                    garment_tokenizer=garment_tokenizer,
+                    model_version=cfg.version
+                ),
+            )
+            gen_num = 100
+        elif cfg.gen_split == "val":
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset_val, shuffle=False, drop_last=False
+            )
+            loader = DataLoader(
+                dataset_val,
+                batch_size=1,
+                shuffle=False,
+                num_workers=12,
+                pin_memory=False,
+                sampler=sampler,
+                collate_fn=partial(
+                    collate_fn,
+                    processor=processor,
+                    garment_tokenizer=garment_tokenizer,
+                    model_version=cfg.version,
+                    inference=True
+                ),
+            )
+            gen_num = -1
+        os.makedirs(os.path.join(output_dir, f"generation_outputs_{cfg.gen_split}"), exist_ok=True)
+        generate(
+            cfg,
+            model, 
+            loader, 
+            garment_tokenizer,
+            processor,
+            ddp_rank, 
+            ddp_world_size,
+            os.path.join(output_dir, f"generation_outputs_{cfg.gen_split}"),
+            gen_num
+        )
     else:
         optimizer_config = {
             "type": "AdamW",
@@ -197,6 +250,7 @@ def main(cfg: MainConfig):
                 processor=processor,
                 garment_tokenizer=garment_tokenizer,
                 model_version=cfg.version
+                inference=False
             ),
             config=ds_config,
         )

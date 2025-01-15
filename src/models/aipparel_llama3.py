@@ -274,6 +274,14 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         self.vocab_size = self.config.text_config.vocab_size
         self.set_output_embeddings(new_lm_head)
 
+    def is_closure(self, token_id):
+        return token_id in [
+            self.config.cline_token_index,
+            self.config.cquadratic_token_index,
+            self.config.ccubic_token_index,
+            self.config.carc_token_index,
+        ]
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -509,32 +517,114 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
 
     def prepare_inputs_for_generation(
         self,
-        input_ids,
-        past_key_values=None,
+        input_ids=None,
         inputs_embeds=None,
-        pixel_values=None,
-        image_sizes=None,
         attention_mask=None,
+        position_ids=None,
+        pixel_values=None,
+        aspect_ratio_ids=None,
+        aspect_ratio_mask=None,
+        cross_attention_mask=None,
+        past_key_values=None,
+        use_cache=False,
         cache_position=None,
         num_logits_to_keep=None,
         **kwargs,
     ):
         # Overwritten -- in specific circumstances we don't want to forward image inputs to the model
 
-        model_inputs = self.language_model.prepare_inputs_for_generation(
-            input_ids,
-            past_key_values=past_key_values,
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            cache_position=cache_position,
-            num_logits_to_keep=num_logits_to_keep,
+        # If we have cache: let's slice `input_ids` through `cache_position`, to keep only the unprocessed tokens
+        # Exception 1: when passing input_embeds, input_ids may be missing entries
+        # Exception 2: some generation methods do special slicing of input_ids, so we don't need to do it here
+        if past_key_values is not None:
+            if inputs_embeds is not None:  # Exception 1
+                input_ids = input_ids[:, -cache_position.shape[0] :]
+                last_hidden_state = last_hidden_state[:, -cache_position.shape[0]:, :]
+            elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
+                input_ids = input_ids[:, cache_position]
+                last_hidden_state = last_hidden_state[:, cache_position, :]
+
+        pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
+        pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
+        if pattern_endpoint_masks.any():
+            assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
+            pattern_endpoints = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 2).to(last_hidden_state)
+            for ind in self.config.get_all_edge_indices(ret_dict=False)[1:]:
+                mask = input_ids == ind
+                if not mask.any():
+                    continue
+                pattern_endpoint_masks |= mask
+                if self.is_closure(ind):
+                    pattern_endpoints[mask] = self.zero_tensor.to(edge_embeds)
+                else:
+                    edge_embeds = last_hidden_state[mask]
+                    pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
+        if pattern_transf_masks.any():
+            assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
+            pattern_transfs = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 7).to(last_hidden_state)
+            transf_embeds = last_hidden_state[pattern_transf_masks]
+            pattern_transfs[pattern_transf_masks] = self.regression_head(transf_embeds)[:, :7]
+
+        # TODO: we have no attention_mask so this won't work, check if we really won't need attention mask and find another way
+        if attention_mask is not None and position_ids is None:
+            # create position_ids on the fly for batch generation
+            position_ids = attention_mask.long().cumsum(-1) - 1
+            position_ids.masked_fill_(attention_mask == 0, 1)
+            if past_key_values:
+                position_ids = position_ids[:, -input_ids.shape[1] :]
+
+                # This `clone` call is needed to avoid recapturing cuda graphs with `torch.compile`'s  `mode="reduce-overhead`, as otherwise the input `position_ids` would have various stride during the decoding. Here, simply using `.contiguous()` is not sufficient as in the batch size = 1 case, `position_ids` is already contiguous but with varying stride which retriggers a capture.
+                position_ids = position_ids.clone(memory_format=torch.contiguous_format)
+
+        # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
+        if inputs_embeds is not None and cache_position[0] == 0:
+            model_inputs = {"inputs_embeds": inputs_embeds, "input_ids": None}
+        else:
+            # The clone here is for the same reason as for `position_ids`.
+            model_inputs = {"input_ids": input_ids.clone(memory_format=torch.contiguous_format), "inputs_embeds": None}
+
+        if num_logits_to_keep is not None:
+            model_inputs["num_logits_to_keep"] = num_logits_to_keep
+
+        model_inputs.update(
+            {
+                "position_ids": position_ids,
+                "cache_position": cache_position,
+                "past_key_values": past_key_values,
+                "use_cache": use_cache,
+                "attention_mask": attention_mask,
+                "cross_attention_mask": cross_attention_mask,
+                "pattern_endpoints": pattern_endpoints,
+                "pattern_endpoint_masks": pattern_endpoint_masks,
+                "pattern_transfs": pattern_transfs,
+                "pattern_transf_masks": pattern_transf_masks,
+            }
+        )
+
+        # If we're in pre-fill or cacheless decoding step, then we need pixel_values and aspect ratios
+        # to compute image hidden states, otherwise they are cached within each cross attn layer
+        if cache_position[0] == 0:
+            model_inputs["pixel_values"] = pixel_values
+            model_inputs["aspect_ratio_ids"] = aspect_ratio_ids
+            model_inputs["aspect_ratio_mask"] = aspect_ratio_mask
+
+        return model_inputs
+
+    def _update_model_kwargs_for_generation(self, outputs, model_kwargs, is_encoder_decoder, **kwargs):
+        cross_attention_mask_prev = model_kwargs.get("cross_attention_mask", None)
+        model_kwargs = super()._update_model_kwargs_for_generation(
+            outputs=outputs,
+            model_kwargs=model_kwargs,
+            is_encoder_decoder=is_encoder_decoder,
             **kwargs,
         )
 
-        # If we're in cached decoding stage, pixel values should be None because input ids do not contain special image token anymore
-        # Otherwise we need pixel values to be passed to model
-        if cache_position[0] == 0:
-            model_inputs["pixel_values"] = pixel_values
-            model_inputs["image_sizes"] = image_sizes
-
-        return model_inputs
+        # add cross-attn mask for new token
+        if cross_attention_mask_prev is not None:
+            model_kwargs["cross_attention_mask"] = torch.cat(
+                [cross_attention_mask_prev, cross_attention_mask_prev[:, -1:, ...]], dim=1
+            )
+        
+        # add last hidden state for param computation
+        model_kwargs["last_hidden_state"] = outputs.hidden_states[-1]
+        return model_kwargs

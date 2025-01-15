@@ -20,7 +20,8 @@ def collate_fn(
     batch, 
     processor: Optional[transformers.AutoProcessor]=None, 
     garment_tokenizer: Optional[GarmentTokenizer]=None, 
-    model_version: Literal["llava-hf/llava-v1.6-mistral-7b-hf", "meta-llama/Llama-3.2-11B-Vision-Instruct"]="llava-hf/llava-v1.6-mistral-7b-hf"
+    model_version: Literal["llava-hf/llava-v1.6-mistral-7b-hf", "meta-llama/Llama-3.2-11B-Vision-Instruct"]="llava-hf/llava-v1.6-mistral-7b-hf",
+    inference: bool=False,
 ):
     sample_type_list = []
     image_path_list = []
@@ -93,24 +94,29 @@ def collate_fn(
         pattern_params[key] = padded_params
         pattern_params_mask[key] = torch.arange(padded_params.shape[1]).unsqueeze(0) < torch.tensor([padded_param[key].shape[0] if key in padded_param else 0 for padded_param in pattern_param_list]).unsqueeze(1)
 
-    input_len = input_batch["input_ids"].shape[1] 
     return_dict = {
-        "input_len": input_len,
-        "image_paths": image_path_list,
         "sample_type": torch.LongTensor(sample_type_list),
-        "labels": labels,
         "pattern_params": pattern_params,
         "pattern_params_mask": pattern_params_mask,
         "pattern_endpoints": pattern_endpoints,
-        "pattern_endpoint_masks": pattern_endpoint_masks,
         "pattern_transfs": pattern_transfs,
-        "pattern_transf_masks": pattern_transf_masks,
-        "gt_patterns": pattern_list,
-        "questions_list": question_list,
-        "question_pattern_endpoints_mask": question_pattern_endpoints_mask,
-        "question_pattern_transfs_mask": question_pattern_transfs_mask,
     }
-    return_dict.update(input_batch)
+    if inference:
+        return_dict.update(questions_batch)
+        return_dict.update({
+            "image_paths": image_path_list,
+            "gt_patterns": pattern_list,
+            "questions_list": question_list,
+            "pattern_endpoints_mask": question_pattern_endpoints_mask,
+            "pattern_transfs_mask": question_pattern_transfs_mask,
+        })
+    else:
+        return_dict.update(input_batch)
+        return_dict.update({
+            "labels": labels,
+            "pattern_endpoint_masks": pattern_endpoint_masks,
+            "pattern_transf_masks": pattern_transf_masks,
+        })
     return return_dict
 
 def construct_labels(
