@@ -27,6 +27,25 @@ class LLaVAInstruct(torch.utils.data.Dataset):
     def _parepare_image(self, image_path: str):
         """Fetch the image for the given index"""
         # assert os.path.exists(image_path), f"The path is not there {image_path}"
+           # Check if the file exists
+        if not os.path.exists(image_path):
+            print(f"Image path does not exist: {image_path}")
+            # Create a dummy image with COCO dimensions (640x480, RGB)
+            image = np.zeros((480, 640, 3), dtype=np.uint8)
+            image[:, :] = [128, 128, 128]  # Set to a neutral gray color
+        else:
+            # Load the image
+            image = cv2.imread(image_path)
+            if image is None:
+                print(f"Failed to load image from path: {image_path}")
+                # Create a dummy image with COCO dimensions
+                image = np.zeros((480, 640, 3), dtype=np.uint8)
+                image[:, :] = [128, 128, 128]  # Set to a neutral gray color
+            else:
+                # Convert BGR to RGB
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        return image
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
