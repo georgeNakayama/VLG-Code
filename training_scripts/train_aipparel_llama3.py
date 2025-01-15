@@ -17,6 +17,7 @@ import transformers
 from typing import Optional
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
+from torch.distributed import init_process_group, destroy_process_group
 
 from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
 from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
@@ -149,6 +150,8 @@ def main(cfg: MainConfig):
     if cfg.eval_only:
         pass
     elif cfg.gen_only:
+        # we don't use deepspeed for generation 
+        init_process_group(backend="nccl")
         if cfg.gen_split == "train":
             sampler = torch.utils.data.distributed.DistributedSampler(
                 dataset_train, shuffle=False, drop_last=False
