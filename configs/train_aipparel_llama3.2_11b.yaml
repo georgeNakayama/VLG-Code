@@ -11,6 +11,7 @@ model:
   edge_loss_weight: 0.1
   num_freq: 9
   num_regression_layers: 2
+    # use_flash_attn: True
 
 optimizer: 
   lr: 0.0006
@@ -18,8 +19,8 @@ optimizer:
   beta2: 0.95
 
 wandb_info:
-  wandb_dir: /miele/george/garment/sewformer
-  wandb_cache_dir: /miele/george/garment/sewformer/cache
+  wandb_dir: /scratch/m000043/garment/aipparel
+  wandb_cache_dir: /scratch/m000043/garment/aipparel/cache
 
 
 project: aipparel
@@ -37,12 +38,12 @@ gen_only: False
 from_start: False
 resume: null
 
-grad_accumulation_steps: 1
-num_steps: 10000
+grad_accumulation_steps: 5
+num_steps: 20000
 save_freq: 500
-warmup_steps: 100
+warmup_steps: 0
 batch_size: 4
 
 hydra:
   run:
-    dir: /miele/george/garment/sewformer/outputs/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: /scratch/m000043/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
