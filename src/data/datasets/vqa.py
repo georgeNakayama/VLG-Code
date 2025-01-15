@@ -84,4 +84,5 @@ class LLaVAInstruct(torch.utils.data.Dataset):
             dialog,
             question,
             ground_truth,
+            -1
         ) 

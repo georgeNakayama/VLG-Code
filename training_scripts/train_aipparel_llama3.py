@@ -19,6 +19,8 @@ from omegaconf import OmegaConf
 
 from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
 from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
+from data.datasets.vqa import LLaVAInstruct
+from data.datasets.weighted_dataset import WeightedDataSet
 from data.collate_fns import collate_fn
 from trainers.train import train
 
@@ -65,6 +67,10 @@ def main(cfg: MainConfig):
     )
     if ddp_rank == 0:
         log.info(f"--> Validation Set Length = {len(dataset_val)}")
+    
+    if True:
+        vqa_dataset = hydra.utils.instantiate(cfg.vqa_dataset)
+        dataset_train = WeightedDataSet(dataset_train, vqa_dataset, 0.9, 0.1)
     
     # Create model
     processor = transformers.AutoProcessor.from_pretrained(

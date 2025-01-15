@@ -22,6 +22,10 @@ def collate_fn(
     garment_tokenizer: Optional[GarmentTokenizer]=None, 
     model_version: Literal["llava-hf/llava-v1.6-mistral-7b-hf", "meta-llama/Llama-3.2-11B-Vision-Instruct"]="llava-hf/llava-v1.6-mistral-7b-hf"
 ):
+    # Execute vqa when needed
+    if batch[0][-1] == -1:
+        return vqa_collate_fn(batch, processor, model_version)
+
     sample_type_list = []
     image_path_list = []
     images_list = []
@@ -176,7 +180,7 @@ def vqa_collate_fn(
     input_len = input_batch["input_ids"].shape[1] 
 
     # Return the collated batch
-    return {
+    return_dict =  {
         "input_len": input_len,
         "image_paths": image_path_list,
         "images": input_batch["pixel_values"],
@@ -185,6 +189,8 @@ def vqa_collate_fn(
         "labels": labels,
         "ground_truth": ground_truth_list,
     }
+    return_dict.update(input_batch)
+    return return_dict
 
 
 def construct_labels(
