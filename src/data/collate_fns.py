@@ -66,7 +66,7 @@ def collate_fn(
                 # only keep the output pattern's params
                 pattern_param_list.append(pattern_dict['params'])
         dialog_list.append(dialog)
-        question_list.append(question)  
+        question_list.append(question)
         question_endpoint_cnt_list.append(question_endpoint_cnt)
         question_transf_cnt_list.append(question_transf_cnt)
         pattern_endpoints_list.append(torch.cat(_endpoint_list))
@@ -184,14 +184,20 @@ def vqa_collate_fn(
         "input_len": input_len,
         "image_paths": image_path_list,
         "images": input_batch["pixel_values"],
-        "input_ids": input_batch["input_ids"],
-        "attention_mask": input_batch["attention_mask"],
         "labels": labels,
-        "ground_truth": ground_truth_list,
+        "pattern_params": None,
+        "pattern_params_mask": None,
+        "pattern_endpoints": None,
+        "pattern_endpoint_masks": None,
+        "pattern_transfs": None,
+        "pattern_transf_masks": None,
+        "gt_patterns": ground_truth_list,
+        "questions_list": None,
+        "question_pattern_endpoints_mask": None,
+        "question_pattern_transfs_mask": None,
     }
     return_dict.update(input_batch)
     return return_dict
-
 
 def construct_labels(
     input_ids: torch.LongTensor, 
