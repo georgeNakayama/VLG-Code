@@ -17,7 +17,6 @@ def _start_experiment(
     ddp_rank,
     ddp_world_size,
     resume,
-    from_start
 ):
     # resume deepspeed checkpoint
     os.environ['WANDB_DIR'] = cfg.wandb_info.wandb_dir
