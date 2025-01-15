@@ -70,7 +70,7 @@ def main(cfg: MainConfig):
     
     if True:
         vqa_dataset = hydra.utils.instantiate(cfg.vqa_dataset)
-        dataset_train = BatchWeightedDataset(dataset_train, vqa_dataset, 0.9, 0.1)
+        dataset_train = BatchWeightedDataset(dataset_train, vqa_dataset, 0.9, 0.1, 4)
     
     # Create model
     processor = transformers.AutoProcessor.from_pretrained(
