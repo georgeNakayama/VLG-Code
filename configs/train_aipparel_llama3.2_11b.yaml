@@ -4,6 +4,7 @@
 # 0.5 * stitch cls loss (focal loss) + 0.005 * stitch ce loss + 5 * panel loss
 defaults: 
   - dataset: gcd_dataset
+  - vqa_dataset: llava
   - garment_tokenizer: regression_garment_tokenizer
   - _self_
 
