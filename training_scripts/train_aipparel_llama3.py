@@ -249,7 +249,7 @@ def main(cfg: MainConfig):
                 collate_fn,
                 processor=processor,
                 garment_tokenizer=garment_tokenizer,
-                model_version=cfg.version
+                model_version=cfg.version,
                 inference=False
             ),
             config=ds_config,
