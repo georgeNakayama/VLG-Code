@@ -28,7 +28,7 @@ class BatchWeightedDataset(Dataset):
         elif hasattr(self.dataset_b, name):
            return getattr(self.dataset_b, name)
         else:
-           raise Exception("None of the datasets implements this function!")
+           raise AttributeError("None of the datasets implements this function!")
 
     def __getitem__(self, idx):
         # Decide which dataset to sample from for the batch
