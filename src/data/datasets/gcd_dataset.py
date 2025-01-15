@@ -214,12 +214,12 @@ class GarmentCodeData(Dataset):
         elif sample_type == SampleType.EDIT:
             # garment_editing
             if random.random() > self.editing_flip_prob:
-                before_pattern = gt_pattern
+                before_pattern = gt_pattern.default_pattern
                 after_pattern = edited_pattern
                 editing_text = editing_captions['editing_description_forward']
             else:
                 before_pattern = edited_pattern
-                after_pattern = gt_pattern
+                after_pattern = gt_pattern.default_pattern
                 editing_text = editing_captions['editing_description_reverse']
                 
             before_pattern.name = "before_" + before_pattern.name
