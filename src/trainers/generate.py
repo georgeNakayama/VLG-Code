@@ -38,7 +38,7 @@ def _start_experiment(
 
         ds_checkpoint_dir = os.path.join(resume, tag)
         state_dict = _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, True)
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=False)
             
         with open(os.path.join(resume, "latest"), "r") as f:
             ckpt_dir = f.readlines()[0].strip()
