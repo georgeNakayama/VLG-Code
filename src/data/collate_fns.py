@@ -107,8 +107,8 @@ def collate_fn(
             "image_paths": image_path_list,
             "gt_patterns": pattern_list,
             "questions_list": question_list,
-            "pattern_endpoints_mask": question_pattern_endpoints_mask,
-            "pattern_transfs_mask": question_pattern_transfs_mask,
+            "pattern_endpoint_masks": question_pattern_endpoints_mask,
+            "pattern_transf_masks": question_pattern_transfs_mask,
         })
     else:
         return_dict.update(input_batch)
