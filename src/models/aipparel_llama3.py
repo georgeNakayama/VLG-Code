@@ -546,6 +546,8 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
 
         pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
         pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
+        pattern_endpoints = None
+        pattern_transfs = None
         if pattern_endpoint_masks.any():
             assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
             pattern_endpoints = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 2).to(last_hidden_state)
