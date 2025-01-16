@@ -544,29 +544,29 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
                 input_ids = input_ids[:, cache_position]
                 last_hidden_state = last_hidden_state[:, cache_position, :]
-
-        pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
-        pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
-        pattern_endpoints = None
-        pattern_transfs = None
-        if pattern_endpoint_masks.any():
-            assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
-            pattern_endpoints = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 2).to(last_hidden_state)
-            for ind in self.config.get_all_edge_indices(ret_dict=False)[1:]:
-                mask = input_ids == ind
-                if not mask.any():
-                    continue
-                pattern_endpoint_masks |= mask
-                if self.is_closure(ind):
-                    pattern_endpoints[mask] = self.zero_tensor.to(edge_embeds)
-                else:
-                    edge_embeds = last_hidden_state[mask]
-                    pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
-        if pattern_transf_masks.any():
-            assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
-            pattern_transfs = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 7).to(last_hidden_state)
-            transf_embeds = last_hidden_state[pattern_transf_masks]
-            pattern_transfs[pattern_transf_masks] = self.regression_head(transf_embeds)[:, :7]
+        if last_hidden_state is not None:
+            pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
+            pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
+            pattern_endpoints = None
+            pattern_transfs = None
+            if pattern_endpoint_masks.any():
+                assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
+                pattern_endpoints = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 2).to(last_hidden_state)
+                for ind in self.config.get_all_edge_indices(ret_dict=False)[1:]:
+                    mask = input_ids == ind
+                    if not mask.any():
+                        continue
+                    pattern_endpoint_masks |= mask
+                    if self.is_closure(ind):
+                        pattern_endpoints[mask] = self.zero_tensor.to(edge_embeds)
+                    else:
+                        edge_embeds = last_hidden_state[mask]
+                        pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
+            if pattern_transf_masks.any():
+                assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
+                pattern_transfs = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 7).to(last_hidden_state)
+                transf_embeds = last_hidden_state[pattern_transf_masks]
+                pattern_transfs[pattern_transf_masks] = self.regression_head(transf_embeds)[:, :7]
 
         # TODO: we have no attention_mask so this won't work, check if we really won't need attention mask and find another way
         if attention_mask is not None and position_ids is None:
