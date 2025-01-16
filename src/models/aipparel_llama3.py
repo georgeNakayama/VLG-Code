@@ -544,11 +544,14 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
                 input_ids = input_ids[:, cache_position]
                 last_hidden_state = last_hidden_state[:, cache_position, :]
+                
+        pattern_transf_masks = None
+        pattern_endpoint_masks = None
+        pattern_endpoints = None
+        pattern_transfs = None
         if last_hidden_state is not None:
             pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
             pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
-            pattern_endpoints = None
-            pattern_transfs = None
             if pattern_endpoint_masks.any():
                 assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_endpoints = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 2).to(last_hidden_state)
