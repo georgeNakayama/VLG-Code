@@ -532,6 +532,12 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         last_hidden_state=None,
         **kwargs,
     ):
+
+        print("Debug outputs")
+        print(input_ids)
+        print(torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]))
+        print(torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
+        print(torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids)))
         # Overwritten -- in specific circumstances we don't want to forward image inputs to the model
 
         # If we have cache: let's slice `input_ids` through `cache_position`, to keep only the unprocessed tokens
@@ -544,6 +550,12 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
                 input_ids = input_ids[:, cache_position]
                 last_hidden_state = last_hidden_state[:, cache_position, :]
+
+        print("Debug outputs")
+        print(input_ids)
+        print(torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]))
+        print(torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
+        print(torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids)))
 
         pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
         pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))

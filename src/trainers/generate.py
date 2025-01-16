@@ -106,6 +106,7 @@ def generate(
         else:
             input_dict["pattern_transfs"] = None
             
+        print(f"The input ids are {input_dict['input_ids']}")
         output_dict = model.generate(
             input_ids=input_dict["input_ids"],
             pixel_values=input_dict["pixel_values"],
