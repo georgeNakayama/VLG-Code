@@ -128,6 +128,8 @@ def main(cfg: MainConfig):
 
     model.config.carc_token = PanelEdgeTypeV3.CLOSURE_ARC.value
     model.config.carc_token_index = garment_tokenizer.panel_edge_type_indices.closure_arc_idx
+    
+    model.config.zero_tensor = garment_tokenizer.get_zero_vertices()
 
     model.enable_input_require_grads()
     model.gradient_checkpointing_enable()

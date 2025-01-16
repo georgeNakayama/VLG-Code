@@ -40,6 +40,9 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
     def get_bin_token_names(self):
         return []
     
+    def get_zero_vertices(self):
+        return -torch.tensor(self.gt_stats.vertices.shift) / torch.tensor(self.gt_stats.vertices.scale)
+    
     def set_token_indices(self, token2idx: Dict[str, int]):
         super().set_token_indices(token2idx)
         self.panel_edge_type_indices = PanelEdgeTypeIndices(token2idx, rot_as_quat=True)

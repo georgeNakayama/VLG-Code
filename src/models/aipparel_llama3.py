@@ -98,6 +98,7 @@ class AIpparelMllamaNextConfig(MllamaConfig):
         edge_loss_weight: float = 1.0,
         num_freq: int = 9,
         num_regression_layers: int = 2,
+        zero_tensor: torch.Tensor = None,
         **kwargs
     ):
         
@@ -130,6 +131,8 @@ class AIpparelMllamaNextConfig(MllamaConfig):
         self.ccubic_token_index = ccubic_token_index
         self.carc_token = carc_token
         self.carc_token_index = carc_token_index
+        
+        self.zero_tensor = zero_tensor
         
         
     def get_all_edge_indices(self, ret_dict=True):
@@ -561,7 +564,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         continue
                     pattern_endpoint_masks |= mask
                     if self.is_closure(ind):
-                        pattern_endpoints[mask] = self.zero_tensor.to(edge_embeds)
+                        pattern_endpoints[mask] = self.config.zero_tensor.to(edge_embeds)
                     else:
                         edge_embeds = last_hidden_state[mask]
                         pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
