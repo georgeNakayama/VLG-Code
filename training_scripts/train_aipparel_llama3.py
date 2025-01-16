@@ -152,6 +152,7 @@ def main(cfg: MainConfig):
     elif cfg.gen_only:
         # we don't use deepspeed for generation 
         init_process_group(backend="nccl")
+        torch.cuda.set_device(ddp_local_rank)
         if cfg.gen_split == "train":
             sampler = torch.utils.data.distributed.DistributedSampler(
                 dataset_train, shuffle=False, drop_last=False

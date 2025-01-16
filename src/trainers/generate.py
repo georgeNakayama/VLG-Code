@@ -77,6 +77,7 @@ def generate(
         cfg.resume)
     
     mode_names = loader.dataset.get_mode_names()
+    model = model.to(f"cuda:{ddp_rank}")
     model.eval()
     cast_dtype = torch.half if cfg.precision == "fp16" else (torch.bfloat16 if cfg.precision == "bf16" else torch.float32)
     eval_sample_time = AverageMeter("Time", ":6.3f")
