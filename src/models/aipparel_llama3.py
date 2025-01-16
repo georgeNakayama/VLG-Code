@@ -529,6 +529,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         use_cache=False,
         cache_position=None,
         num_logits_to_keep=None,
+        last_hidden_state=None,
         **kwargs,
     ):
         # Overwritten -- in specific circumstances we don't want to forward image inputs to the model
