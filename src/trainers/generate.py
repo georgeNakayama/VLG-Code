@@ -3,7 +3,7 @@ import wandb as wb
 from omegaconf import OmegaConf
 import torch
 from trainers.convert_zero_to_torch import _get_fp32_state_dict_from_zero_checkpoint
-from trainers.utils import dict_to_cpu, dict_to_dtype, AverageMeter
+from trainers.utils import dict_to_cpu, dict_to_dtype, AverageMeter, dict_to_cuda
 import time
 import logging
 import torch.distributed as dist
@@ -93,6 +93,7 @@ def generate(
         if i == gen_num:
             break
         
+        input_dict = dict_to_cuda(input_dict)
         input_dict["pixel_values"] = input_dict["pixel_values"].to(cast_dtype)
         if "pattern_endpoints" in input_dict and input_dict["pattern_endpoints"].shape[1] > 0:
             input_dict["pattern_endpoints"] = input_dict["pattern_endpoints"].to(cast_dtype)
