@@ -1,8 +1,8 @@
 _target_: data.datasets.gcd_dataset.GarmentCodeData
 
-root_dir: /scratch/m000043/garmentcodedata
-editing_dir: /scratch/m000043/garmentcodedata_editing
-caption_dir: /scratch/m000043/long-caption-processed
+root_dir: /scratch/m000051/garment_gang/data/garmentcodedata
+editing_dir: /scratch/m000051/garment_gang/data/garmentcodedata_editing
+caption_dir: /scratch/m000051/garment_gang/data/long-caption-processed
 editing_flip_prob: 0.5
 sampling_rate: [0.3, 0.1, 0.1, 0.4, 0.1]
 panel_classification: assets/panel_classes_garmentcodedata.json
