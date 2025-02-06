@@ -37,6 +37,7 @@ def _start_experiment(
             raise ValueError(f"Unable to find 'latest' file at {latest_path}")
 
         ds_checkpoint_dir = os.path.join(resume, tag)
+        print(f"The checkpointdir that we will load is {ds_checkpoint_dir}")
         state_dict = _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, True)
         model.load_state_dict(state_dict, strict=False)
             
@@ -51,6 +52,8 @@ def _start_experiment(
                     resume, start_step
                 )
             )
+    else:
+        return 0
     if ddp_rank == 0:
         wb.watch(model, log='all')
     return start_step
@@ -106,8 +109,7 @@ def generate(
         else:
             input_dict["pattern_transfs"] = None
             
-        print(f"The input ids are {input_dict['input_ids']}")
-        output_dict = model.generate(
+        output_tensor = model.generate(
             input_ids=input_dict["input_ids"],
             pixel_values=input_dict["pixel_values"],
             attention_mask=input_dict["attention_mask"],
@@ -118,13 +120,11 @@ def generate(
             pattern_endpoint_masks=input_dict["pattern_endpoint_masks"],
             pattern_transfs=input_dict["pattern_transfs"],
             pattern_transf_masks=input_dict["pattern_transf_masks"],
-            max_new_tokens=2100
+            max_new_tokens=2100,
+            return_dict=True
         )
-        
-        output_dict = dict_to_cpu(output_dict)
-        output_dict = dict_to_dtype(output_dict, torch.float32)
-        output_dict["input_mask"] = torch.arange(output_dict["output_ids"].shape[1]).reshape(1, -1) >= input_dict["question_ids"].shape[1]
-        output_text, patterns, error_type = garment_tokenizer.decode(output_dict, processor)
+        output_tensor = output_tensor.cpu().float()
+        output_text, patterns, error_type = garment_tokenizer.decode_tensor(output_tensor, processor)
         try:
             data_name = input_dict["gt_patterns"][0][-1].name
             os.makedirs(os.path.join(log_dir, data_name), exist_ok=True)

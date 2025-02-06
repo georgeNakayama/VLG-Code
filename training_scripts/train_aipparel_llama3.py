@@ -41,7 +41,7 @@ class MainConfig:
     batch_size: int = 16
     optimizer: dict = field(default_factory=lambda: {"lr": 1e-4, "beta1": 0.9, "beta2": 0.999})
 
-@hydra.main(version_base=None, config_path='./configs', config_name='config')
+@hydra.main(version_base=None, config_path='../configs', config_name='config')
 def main(cfg: MainConfig):
     log.info(f"Working directory : {os.getcwd()}")
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
@@ -54,6 +54,7 @@ def main(cfg: MainConfig):
     garment_tokenizer = hydra.utils.instantiate(
         cfg.garment_tokenizer,
     )
+
     
     dataset_train = hydra.utils.instantiate(
         cfg.dataset,

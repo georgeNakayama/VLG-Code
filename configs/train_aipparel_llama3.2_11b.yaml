@@ -47,4 +47,4 @@ batch_size: 4
 
 hydra:
   run:
-    dir: /scratch/m000043/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: /scratch/m000051/garment_gang/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}

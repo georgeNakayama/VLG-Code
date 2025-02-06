@@ -158,6 +158,36 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
         pattern_dict, error_type = self.decode_pattern(pattern_tokens, output_param_dict, tokenizer)
         pattern.pattern_from_pattern_dict(pattern_dict)
         return text_output, pattern, error_type
+    
+    def decode_tensor(self, output_tensor, tokenizer: PreTrainedTokenizer): 
+        """Decode output ids to text"""
+        output_param_dict = {k:v for k, v in output_dict['params'].items()}
+        
+            
+        text_output = tokenizer.decode(output_tensor, skip_special_tokens=True)
+        output_tensor = output_tensor.cpu().numpy().copy()
+        garment_ends = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_END))
+        garment_starts = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_START))
+        pattern = GCD_NNSewingPattern()
+        if len(garment_starts) != len(garment_ends) or \
+            len(garment_starts) == 0 or \
+            len(garment_ends) == 0 or \
+            np.any(garment_starts > garment_ends):
+            log.error("Garment Decoding Error: Unmatched or Invalid number of garment starts and ends")    
+            return text_output, pattern, DecodeErrorTypes.UNMATCHED_PATTERN_TOKENS
+        
+        garment_start, garment_end = garment_starts[0], garment_ends[0]
+        pattern_tokens = output_tensor[garment_start+1:garment_end]
+        
+        for k, v in output_param_dict.items():
+            param_mask = pattern_tokens == k
+            if v.shape[0] != param_mask.sum():
+                log.error(f"Param {k} has wrong shape {v.shape} vs {param_mask.sum()}. Output is {text_output}")
+                output_param_dict[k] = v[:param_mask.sum()]
+            
+        pattern_dict, error_type = self.decode_pattern(pattern_tokens, output_param_dict, tokenizer)
+        pattern.pattern_from_pattern_dict(pattern_dict)
+        return text_output, pattern, error_type
         
     def decode_pattern(self, token_sequence: np.ndarray, param_dict: Dict[int, np.ndarray], tokenizer: PreTrainedTokenizer): 
         assert self.bin_idx2bin_number is not None \

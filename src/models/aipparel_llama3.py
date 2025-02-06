@@ -502,7 +502,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 total_loss = self.config.edge_loss_weight * edge_loss
             
             total_loss += ce_loss
-        
+
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (total_loss,) + output if loss is not None else output
@@ -536,24 +536,28 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         **kwargs,
     ):
 
-        print("Debug outputs")
-        print(input_ids)
-        print(torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]))
-        print(torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
-        print(torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids)))
         # Overwritten -- in specific circumstances we don't want to forward image inputs to the model
 
         # If we have cache: let's slice `input_ids` through `cache_position`, to keep only the unprocessed tokens
         # Exception 1: when passing input_embeds, input_ids may be missing entries
         # Exception 2: some generation methods do special slicing of input_ids, so we don't need to do it here
-        assert past_key_values is None, "Something is off"
-        if past_key_values is not None:
+
+        # print(f"The shape of cache position is {cache_position.shape}", f"The maximum of cache positions is {max(cache_position)}", f"The input_ids shape is {input_ids.shape}")
+        # print(f"{len(past_key_values)}", flush=True)
+        # print(f"{input_ids}", flush=True)
+
+        if len(past_key_values) != 0:
             if inputs_embeds is not None:  # Exception 1
                 input_ids = input_ids[:, -cache_position.shape[0] :]
                 last_hidden_state = last_hidden_state[:, -cache_position.shape[0]:, :]
             elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
+                # print(f"-----------------Went inside and got {input_ids, cache_position - 1 , last_hidden_state.shape}", flush=True)
                 input_ids = input_ids[:, cache_position]
-                last_hidden_state = last_hidden_state[:, cache_position, :]
+                # assert len(cache_position) == 1
+                # assert len(last_hidden_state) == 1
+                # assert cache_position[0] == len(last_hidden_state[0])
+                # assert cache_position[0] - 1 < len(last_hidden_state[0])
+                last_hidden_state = last_hidden_state[:, [-1], :]
 
         pattern_transf_masks = None
         pattern_endpoint_masks = None
@@ -561,6 +565,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         pattern_transfs = None
         if last_hidden_state is not None:
             pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
+            # print(f"Just checking {self.config.get_all_edge_indices(ret_dict=False)[1:]}", f"The bad input ids {input_ids}")
             pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
             if pattern_endpoint_masks.any():
                 assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
@@ -571,7 +576,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         continue
                     pattern_endpoint_masks |= mask
                     if self.is_closure(ind):
-                        pattern_endpoints[mask] = self.config.zero_tensor.to(edge_embeds)
+                        pattern_endpoints[mask] = self.config.zero_tensor.to(last_hidden_state)
                     else:
                         edge_embeds = last_hidden_state[mask]
                         pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
@@ -586,7 +591,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             # create position_ids on the fly for batch generation
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
-            if past_key_values:
+            if len(past_key_values) != 0:
                 position_ids = position_ids[:, -input_ids.shape[1] :]
 
                 # This `clone` call is needed to avoid recapturing cuda graphs with `torch.compile`'s  `mode="reduce-overhead`, as otherwise the input `position_ids` would have various stride during the decoding. Here, simply using `.contiguous()` is not sufficient as in the batch size = 1 case, `position_ids` is already contiguous but with varying stride which retriggers a capture.
