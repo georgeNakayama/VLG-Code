@@ -108,6 +108,8 @@ def generate(
             input_dict["pattern_transfs"] = input_dict["pattern_transfs"].to(cast_dtype)
         else:
             input_dict["pattern_transfs"] = None
+
+        param_dict = {}
             
         output_tensor = model.generate(
             input_ids=input_dict["input_ids"],
@@ -120,10 +122,10 @@ def generate(
             pattern_endpoint_masks=input_dict["pattern_endpoint_masks"],
             pattern_transfs=input_dict["pattern_transfs"],
             pattern_transf_masks=input_dict["pattern_transf_masks"],
+            param_dict=param_dict,
             max_new_tokens=2100,
-            return_dict=True
         )
-        output_tensor = output_tensor.cpu().float()
+        output_tensor = output_tensor.float()
         output_text, patterns, error_type = garment_tokenizer.decode_tensor(output_tensor, processor)
         try:
             data_name = input_dict["gt_patterns"][0][-1].name

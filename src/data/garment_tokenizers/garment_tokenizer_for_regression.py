@@ -161,7 +161,7 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
     
     def decode_tensor(self, output_tensor, tokenizer: PreTrainedTokenizer): 
         """Decode output ids to text"""
-        output_param_dict = {k:v for k, v in output_dict['params'].items()}
+        output_param_dict = {}# {k:v for k, v in output_dict['params'].items()}
         
             
         text_output = tokenizer.decode(output_tensor, skip_special_tokens=True)

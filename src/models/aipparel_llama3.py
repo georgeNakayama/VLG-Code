@@ -304,6 +304,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         num_logits_to_keep: int = 0,
+        param_dict: Optional[dict] = None,
         
         pattern_params: Optional[Dict[int, torch.FloatTensor]] = None,
         pattern_params_mask: Optional[Dict[int, torch.BoolTensor]] = None,
@@ -502,6 +503,12 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 total_loss = self.config.edge_loss_weight * edge_loss
             
             total_loss += ce_loss
+
+            print(f"Param_dict is {param_dict}")
+            if param_dict is not None:
+                for k, v in param_preds:
+                    print(f"Mering for {k}, {v.shape}, {param_dict[k].shape}")
+                    param_dict[v] = torch.cat((param_dict[k], v))
 
         if not return_dict:
             output = (logits,) + outputs[1:]
