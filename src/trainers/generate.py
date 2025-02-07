@@ -109,7 +109,7 @@ def generate(
         else:
             input_dict["pattern_transfs"] = None
 
-        param_dict = {}
+        param_dict = {} 
             
         output_tensor = model.generate(
             input_ids=input_dict["input_ids"],
@@ -126,7 +126,7 @@ def generate(
             max_new_tokens=2100,
         )
         output_tensor = output_tensor.float()
-        output_text, patterns, error_type = garment_tokenizer.decode_tensor(output_tensor, processor)
+        output_text, patterns, error_type = garment_tokenizer.decode_tensor(output_tensor, param_dict, processor)
         try:
             data_name = input_dict["gt_patterns"][0][-1].name
             os.makedirs(os.path.join(log_dir, data_name), exist_ok=True)
@@ -144,8 +144,8 @@ def generate(
         except Exception as e:
             log.error(e)
             pass
-        eval_sample_time.update(time.time() - end)
         end = time.time()
+        eval_sample_time.update(time.time() - end)
         all_gt_patterns.append(input_dict["gt_patterns"][0])
         all_sample_types.append(input_dict["sample_type"][0].cpu().numpy())  
         all_patterns.append(patterns)
@@ -183,9 +183,8 @@ def generate(
         total_stitch_acc = stitch_accs[stitch_accs != -1].sum() \
             / max((stitch_accs != -1).sum(), 1)
         
-        all_sample_types = np.array(all_sample_types)
         for i, mode in enumerate(mode_names):
-            mode_mask = all_sample_types == i
+            mode_mask = np.array(all_sample_types) == i
             mode_mask = torch.from_numpy(mode_mask).to(num_edge_accs).bool()
             if not mode_mask.any():
                 continue

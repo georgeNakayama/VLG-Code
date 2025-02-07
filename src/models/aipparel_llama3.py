@@ -15,6 +15,7 @@
 """PyTorch Llava-NeXT model."""
 
 import math
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union, Dict
 
@@ -304,7 +305,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         num_logits_to_keep: int = 0,
-        param_dict: Optional[dict] = None,
         
         pattern_params: Optional[Dict[int, torch.FloatTensor]] = None,
         pattern_params_mask: Optional[Dict[int, torch.BoolTensor]] = None,
@@ -504,12 +504,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             
             total_loss += ce_loss
 
-            print(f"Param_dict is {param_dict}")
-            if param_dict is not None:
-                for k, v in param_preds:
-                    print(f"Mering for {k}, {v.shape}, {param_dict[k].shape}")
-                    param_dict[v] = torch.cat((param_dict[k], v))
-
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (total_loss,) + output if loss is not None else output
@@ -540,6 +534,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         cache_position=None,
         num_logits_to_keep=None,
         last_hidden_state=None,
+        param_dict=defaultdict(torch.Tensor),
         **kwargs,
     ):
 
@@ -548,22 +543,12 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         # If we have cache: let's slice `input_ids` through `cache_position`, to keep only the unprocessed tokens
         # Exception 1: when passing input_embeds, input_ids may be missing entries
         # Exception 2: some generation methods do special slicing of input_ids, so we don't need to do it here
-
-        # print(f"The shape of cache position is {cache_position.shape}", f"The maximum of cache positions is {max(cache_position)}", f"The input_ids shape is {input_ids.shape}")
-        # print(f"{len(past_key_values)}", flush=True)
-        # print(f"{input_ids}", flush=True)
-
         if len(past_key_values) != 0:
             if inputs_embeds is not None:  # Exception 1
                 input_ids = input_ids[:, -cache_position.shape[0] :]
                 last_hidden_state = last_hidden_state[:, -cache_position.shape[0]:, :]
             elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
-                # print(f"-----------------Went inside and got {input_ids, cache_position - 1 , last_hidden_state.shape}", flush=True)
                 input_ids = input_ids[:, cache_position]
-                # assert len(cache_position) == 1
-                # assert len(last_hidden_state) == 1
-                # assert cache_position[0] == len(last_hidden_state[0])
-                # assert cache_position[0] - 1 < len(last_hidden_state[0])
                 last_hidden_state = last_hidden_state[:, [-1], :]
 
         pattern_transf_masks = None
@@ -572,21 +557,57 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         pattern_transfs = None
         if last_hidden_state is not None:
             pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
-            # print(f"Just checking {self.config.get_all_edge_indices(ret_dict=False)[1:]}", f"The bad input ids {input_ids}")
             pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
             if pattern_endpoint_masks.any():
                 assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_endpoints = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 2).to(last_hidden_state)
-                for ind in self.config.get_all_edge_indices(ret_dict=False)[1:]:
+                for ind in self.config.get_all_edge_indices(ret_dict=False):
+
                     mask = input_ids == ind
                     if not mask.any():
                         continue
-                    pattern_endpoint_masks |= mask
-                    if self.is_closure(ind):
-                        pattern_endpoints[mask] = self.config.zero_tensor.to(last_hidden_state)
+                    if ind != self.config.get_all_edge_indices(ret_dict=False)[0]:
+                        pattern_endpoint_masks |= mask
+                        if self.is_closure(ind):
+                            pattern_endpoints[mask] = self.config.zero_tensor.to(last_hidden_state)
+                        else:
+                            edge_embeds = last_hidden_state[mask]
+                            pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
+                        
+                    panel_params = self.regression_head(last_hidden_state[mask])
+
+                    if ind == self.config.cline_token_index:
+                        panel_params = torch.empty(0)
+                    if ind == self.config.transf_token_index:
+                        # transf
+                        panel_params = panel_params[:, :7]
+                    elif ind == self.config.line_token_index:
+                        # line
+                        panel_params = panel_params[:, 7:9]
+                    elif ind == self.config.quadratic_token_index:
+                        # quadratic
+                        panel_params = panel_params[:, 7:11]
+                    elif ind == self.config.cubic_token_index:
+                        # cubic
+                        panel_params = panel_params[:, 7:13]
+                    elif ind == self.config.arc_token_index:
+                        # arc
+                        panel_params = torch.cat([panel_params[:, 7:9], panel_params[:, 13:15]], dim=-1)
+                    elif ind == self.config.cquadratic_token_index:
+                        # c_quadratic
+                        panel_params = panel_params[:, 9:11]
+                    elif ind == self.config.ccubic_token_index:
+                        # c_cubic
+                        panel_params = panel_params[:, 9:13]
+                    elif ind == self.config.carc_token_index:
+                        # c_arc
+                        panel_params = panel_params[:, 13:15]
+                
+                    if not ind in param_dict:
+                        param_dict[ind] = panel_params
                     else:
-                        edge_embeds = last_hidden_state[mask]
-                        pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
+                        param_dict[ind] = torch.cat([param_dict[ind], panel_params])
+
             if pattern_transf_masks.any():
                 assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_transfs = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 7).to(last_hidden_state)

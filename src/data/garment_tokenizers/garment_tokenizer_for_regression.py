@@ -159,15 +159,18 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
         pattern.pattern_from_pattern_dict(pattern_dict)
         return text_output, pattern, error_type
     
-    def decode_tensor(self, output_tensor, tokenizer: PreTrainedTokenizer): 
+    def decode_tensor(self, output_tensor, param_dict, tokenizer: PreTrainedTokenizer): 
         """Decode output ids to text"""
-        output_param_dict = {}# {k:v for k, v in output_dict['params'].items()}
-        
+        output_param_dict = param_dict
             
-        text_output = tokenizer.decode(output_tensor, skip_special_tokens=True)
+        output_tensor = output_tensor[0].long()
+        text_output = tokenizer.decode(output_tensor, skip_special_tokens=False)
+        print(f"The decoded str is f{text_output}")
         output_tensor = output_tensor.cpu().numpy().copy()
-        garment_ends = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_END))
-        garment_starts = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_START))
+        garment_ends = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_END))[0]
+        garment_starts = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_START))[0]
+        print(f"Garment_starts with length {len(garment_starts)} and Garment_ends are with length {len(garment_ends)}")
+        print(f"The output_tensor is with length {len(output_tensor)}")
         pattern = GCD_NNSewingPattern()
         if len(garment_starts) != len(garment_ends) or \
             len(garment_starts) == 0 or \
