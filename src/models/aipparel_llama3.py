@@ -548,11 +548,13 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 input_ids = input_ids[:, -cache_position.shape[0] :]
                 last_hidden_state = last_hidden_state[:, -cache_position.shape[0]:, :]
             elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
+                assert len(cache_position) == 1, "cache_position should be of shape (batch_size, 1)"
+                print(cache_position.shape)
                 input_ids = input_ids[:, cache_position]
                 last_hidden_state = last_hidden_state[:, [-1], :]
 
-        pattern_transf_masks = None
-        pattern_endpoint_masks = None
+        transformations_mask = None
+        endpoints_mask = None
         pattern_endpoints = None
         pattern_transfs = None
         if last_hidden_state is not None:
@@ -561,13 +563,17 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             if pattern_endpoint_masks.any():
                 assert pattern_endpoint_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_endpoints = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 2).to(last_hidden_state)
+                endpoints_mask = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1]).bool().cuda()
+                # so pattern_endpoints[endpoints_mask] gives you all endpoints. 
+                # self.config.get_all_edge_indices(ret_dict=False) is a list of all the edge-type token indices (defined above).
                 for ind in self.config.get_all_edge_indices(ret_dict=False):
 
                     mask = input_ids == ind
                     if not mask.any():
                         continue
                     if ind != self.config.get_all_edge_indices(ret_dict=False)[0]:
-                        pattern_endpoint_masks |= mask
+                        # if ind is one of the edge, not a transformation
+                        endpoints_mask |= mask
                         if self.is_closure(ind):
                             pattern_endpoints[mask] = self.config.zero_tensor.to(last_hidden_state)
                         else:
@@ -611,8 +617,10 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             if pattern_transf_masks.any():
                 assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_transfs = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 7).to(last_hidden_state)
+                transformations_mask = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1]).bool().cuda()
                 transf_embeds = last_hidden_state[pattern_transf_masks]
                 pattern_transfs[pattern_transf_masks] = self.regression_head(transf_embeds)[:, :7]
+                transformations_mask[pattern_transf_masks] = True
 
         # TODO: we have no attention_mask so this won't work, check if we really won't need attention mask and find another way
         if attention_mask is not None and position_ids is None:
@@ -644,9 +652,9 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 "attention_mask": attention_mask,
                 "cross_attention_mask": cross_attention_mask,
                 "pattern_endpoints": pattern_endpoints,
-                "pattern_endpoint_masks": pattern_endpoint_masks,
+                "pattern_endpoint_masks": endpoints_mask,
                 "pattern_transfs": pattern_transfs,
-                "pattern_transf_masks": pattern_transf_masks,
+                "pattern_transf_masks": transformations_mask,
             }
         )
 
