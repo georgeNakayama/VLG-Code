@@ -580,8 +580,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         
                     panel_params = self.regression_head(last_hidden_state[mask])
 
-                    print(f"The panel_params shape is {panel_params.shape}")
-
                     if ind == self.config.cline_token_index:
                         panel_params = torch.empty(1, 1)
                     if ind == self.config.transf_token_index:
@@ -626,7 +624,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 if not ind in param_dict:
                     param_dict[ind] = pattern_transfs.reshape(-1, 7)
                 else:
-                    param_dict[ind] = torch.cat([param_dict[ind], pattern_transfs], dim=0)
+                    param_dict[ind] = torch.cat([param_dict[ind], pattern_transfs.reshape(-1, 7)], dim=0)
 
 
 
