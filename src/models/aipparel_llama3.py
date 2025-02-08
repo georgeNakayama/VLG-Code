@@ -586,33 +586,33 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         panel_params = torch.empty(1, 1)
                     if ind == self.config.transf_token_index:
                         # transf
-                        panel_params = panel_params[:, :7]
+                        panel_params = panel_params[:, :7].reshape(-1, 7)
                     elif ind == self.config.line_token_index:
                         # line
-                        panel_params = panel_params[:, 7:9]
+                        panel_params = panel_params[:, 7:9].reshape(-1, 2)
                     elif ind == self.config.quadratic_token_index:
                         # quadratic
-                        panel_params = panel_params[:, 7:11]
+                        panel_params = panel_params[:, 7:11].reshape(-1, 4)
                     elif ind == self.config.cubic_token_index:
                         # cubic
-                        panel_params = panel_params[:, 7:13]
+                        panel_params = panel_params[:, 7:13].reshape(-1, 6)
                     elif ind == self.config.arc_token_index:
                         # arc
-                        panel_params = torch.cat([panel_params[:, 7:9], panel_params[:, 13:15]], dim=-1)
+                        panel_params = torch.cat([panel_params[:, 7:9], panel_params[:, 13:15]], dim=-1).reshape(-1, 4)
                     elif ind == self.config.cquadratic_token_index:
                         # c_quadratic
-                        panel_params = panel_params[:, 9:11]
+                        panel_params = panel_params[:, 9:11].reshape(-1, 2)
                     elif ind == self.config.ccubic_token_index:
                         # c_cubic
-                        panel_params = panel_params[:, 9:13]
+                        panel_params = panel_params[:, 9:13].reshape(-1, 4)
                     elif ind == self.config.carc_token_index:
                         # c_arc
-                        panel_params = panel_params[:, 13:15]
+                        panel_params = panel_params[:, 13:15].reshape(-1, 2)
                 
                     if not ind in param_dict:
                         param_dict[ind] = panel_params
                     else:
-                        param_dict[ind] = torch.cat([param_dict[ind], panel_params])
+                        param_dict[ind] = torch.cat([param_dict[ind], panel_params], dim=0)
 
             if pattern_transf_masks.any():
                 assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
@@ -624,9 +624,9 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
 
                 ind = self.config.get_all_edge_indices(ret_dict=False)[0]
                 if not ind in param_dict:
-                    param_dict[ind] = pattern_transfs
+                    param_dict[ind] = pattern_transfs.reshape(-1, 7)
                 else:
-                    param_dict[ind] = torch.cat([param_dict[ind], pattern_transfs])
+                    param_dict[ind] = torch.cat([param_dict[ind], pattern_transfs], dim=0)
 
 
 
