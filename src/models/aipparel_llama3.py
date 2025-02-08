@@ -404,7 +404,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
-        if input_ids is not None and labels is not None:
+        if input_ids is not None:
             transf_mask = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
             edge_mask = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
             if (edge_mask is not None and pattern_endpoints is not None and pattern_endpoint_masks is not None):
@@ -549,7 +549,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 last_hidden_state = last_hidden_state[:, -cache_position.shape[0]:, :]
             elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
                 assert len(cache_position) == 1, "cache_position should be of shape (batch_size, 1)"
-                print(cache_position.shape)
                 input_ids = input_ids[:, cache_position]
                 last_hidden_state = last_hidden_state[:, [-1], :]
 
@@ -566,8 +565,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 endpoints_mask = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1]).bool().cuda()
                 # so pattern_endpoints[endpoints_mask] gives you all endpoints. 
                 # self.config.get_all_edge_indices(ret_dict=False) is a list of all the edge-type token indices (defined above).
-                for ind in self.config.get_all_edge_indices(ret_dict=False):
-
+                for ind in self.config.get_all_edge_indices(ret_dict=False)[1:]:
                     mask = input_ids == ind
                     if not mask.any():
                         continue
@@ -582,8 +580,10 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         
                     panel_params = self.regression_head(last_hidden_state[mask])
 
+                    print(f"The panel_params shape is {panel_params.shape}")
+
                     if ind == self.config.cline_token_index:
-                        panel_params = torch.empty(0)
+                        panel_params = torch.empty(1, 1)
                     if ind == self.config.transf_token_index:
                         # transf
                         panel_params = panel_params[:, :7]
@@ -621,6 +621,14 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 transf_embeds = last_hidden_state[pattern_transf_masks]
                 pattern_transfs[pattern_transf_masks] = self.regression_head(transf_embeds)[:, :7]
                 transformations_mask[pattern_transf_masks] = True
+
+                ind = self.config.get_all_edge_indices(ret_dict=False)[0]
+                if not ind in param_dict:
+                    param_dict[ind] = pattern_transfs
+                else:
+                    param_dict[ind] = torch.cat([param_dict[ind], pattern_transfs])
+
+
 
         # TODO: we have no attention_mask so this won't work, check if we really won't need attention mask and find another way
         if attention_mask is not None and position_ids is None:

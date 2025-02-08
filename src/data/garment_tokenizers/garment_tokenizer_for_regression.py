@@ -161,16 +161,14 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
     
     def decode_tensor(self, output_tensor, param_dict, tokenizer: PreTrainedTokenizer): 
         """Decode output ids to text"""
+        output_param_dict = {k:v[0] for k, v in param_dict.items()}
         output_param_dict = param_dict
             
         output_tensor = output_tensor[0].long()
         text_output = tokenizer.decode(output_tensor, skip_special_tokens=False)
-        print(f"The decoded str is f{text_output}")
         output_tensor = output_tensor.cpu().numpy().copy()
         garment_ends = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_END))[0]
         garment_starts = np.where(output_tensor == self.special_token_indices.get_token_indices(SpecialTokensV2.PATTERN_START))[0]
-        print(f"Garment_starts with length {len(garment_starts)} and Garment_ends are with length {len(garment_ends)}")
-        print(f"The output_tensor is with length {len(output_tensor)}")
         pattern = GCD_NNSewingPattern()
         if len(garment_starts) != len(garment_ends) or \
             len(garment_starts) == 0 or \
@@ -247,6 +245,7 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
                 
                     
                 if edge_type == PanelEdgeTypeV3.MOVE:
+                    params = params[0]
                     transl_params, rot_params = params[:3], params[3:]
                     transl_params = transl_params * np.array(self.gt_stats.translations.scale) + np.array(self.gt_stats.translations.shift)
                     rot_params = rot_params * np.array(self.gt_stats.rotations.scale) + np.array(self.gt_stats.rotations.shift)

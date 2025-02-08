@@ -125,6 +125,9 @@ def generate(
             param_dict=param_dict,
             max_new_tokens=2100,
         )
+        param_dict = dict_to_dtype(param_dict) # to torch.floar32
+        param_dict = dict_to_cpu(param_dict)
+
         output_tensor = output_tensor.float()
         output_text, patterns, error_type = garment_tokenizer.decode_tensor(output_tensor, param_dict, processor)
         try:
