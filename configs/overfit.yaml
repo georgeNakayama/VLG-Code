@@ -3,7 +3,7 @@
 
 # 0.5 * stitch cls loss (focal loss) + 0.005 * stitch ce loss + 5 * panel loss
 defaults: 
-  - dataset: gcd_dataset
+  - dataset: gcd_overfit
   - garment_tokenizer: regression_garment_tokenizer
   - _self_
 
@@ -23,8 +23,8 @@ wandb_info:
   wandb_cache_dir: /scratch/m000051/garment_gang/cache
 
 
-project: vlg
-run_name: vlg_llama3.2_11b
+project: VLG
+run_name: overfit
 run_id: null
 run_local_path: null
 
@@ -39,11 +39,11 @@ gen_split: val
 from_start: False
 resume: null
 
-grad_accumulation_steps: 5
+grad_accumulation_steps: 1
 num_steps: 20000
 save_freq: 500
-warmup_steps: 0
-batch_size: 8
+warmup_steps: 100
+batch_size: 1
 
 hydra:
   run:
