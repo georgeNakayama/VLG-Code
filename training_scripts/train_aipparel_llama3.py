@@ -22,8 +22,9 @@ from torch.distributed import init_process_group, destroy_process_group
 from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
 from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
 from data.collate_fns import collate_fn
-from trainers.train import train
+from trainers.evaluate import evaluate
 from trainers.generate import generate
+from trainers.train import train
 
 @dataclass
 class MainConfig:
@@ -151,6 +152,36 @@ def main(cfg: MainConfig):
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Total parameters: {total_params}, Trainable parameters: {trainable_params} ({trainable_params/total_params:.4f})")
     if cfg.eval_only:
+        init_process_group(backend="nccl")
+        torch.cuda.set_device(ddp_local_rank)
+        sampler = torch.utils.data.distributed.DistributedSampler(
+            dataset_val, shuffle=False, drop_last=False
+        )
+        val_loader = DataLoader(
+            dataset_val,
+            batch_size=1,
+            shuffle=False,
+            num_workers=12,
+            pin_memory=False,
+            sampler=sampler,
+            collate_fn=partial(
+                collate_fn,
+                processor=processor,
+                garment_tokenizer=garment_tokenizer,
+                model_version=cfg.version,
+                inference=True
+            ),
+        )
+        os.makedirs(os.path.join(output_dir, "eval_outputs"), exist_ok=True)
+        evaluate(
+            cfg,
+            model,
+            val_loader,
+            garment_tokenizer,
+            processor,
+            output_dir,
+            ddp_local_rank
+        )
         pass
     elif cfg.gen_only:
         # we don't use deepspeed for generation 
