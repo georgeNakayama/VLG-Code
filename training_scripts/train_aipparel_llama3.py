@@ -103,6 +103,8 @@ def main(cfg: MainConfig):
         cfg.version,
         **model_dict
     )
+    if master_process:
+        print(model)
     
     model.config.transf_token = PanelEdgeTypeV3.MOVE.value
     model.config.transf_token_index = garment_tokenizer.panel_edge_type_indices.move_idx
@@ -169,18 +171,16 @@ def main(cfg: MainConfig):
                 processor=processor,
                 garment_tokenizer=garment_tokenizer,
                 model_version=cfg.version,
-                inference=True
+                inference=False
             ),
         )
-        os.makedirs(os.path.join(output_dir, "eval_outputs"), exist_ok=True)
         evaluate(
             cfg,
             model,
             val_loader,
             garment_tokenizer,
-            processor,
-            output_dir,
-            ddp_local_rank
+            ddp_local_rank, 
+            ddp_world_size
         )
         pass
     elif cfg.gen_only:
@@ -292,17 +292,17 @@ def main(cfg: MainConfig):
             ),
             config=ds_config,
         )
-    train(
-        cfg,
-        model_engine, 
-        optimizer, 
-        train_loader, 
-        scheduler,
-        garment_tokenizer,
-        ddp_rank, 
-        ddp_world_size,
-        output_dir
-    )
+        train(
+            cfg,
+            model_engine, 
+            optimizer, 
+            train_loader, 
+            scheduler,
+            garment_tokenizer,
+            ddp_rank, 
+            ddp_world_size,
+            output_dir
+        )
 
 
 if __name__ == "__main__":

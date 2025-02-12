@@ -58,7 +58,6 @@ def evaluate(
         cfg, 
         model, 
         ddp_rank, 
-        ddp_world_size,
         cfg.resume)
     
     mode_names = loader.dataset.get_mode_names()

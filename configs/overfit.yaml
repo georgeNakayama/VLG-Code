@@ -23,7 +23,7 @@ wandb_info:
   wandb_cache_dir: /scratch/m000051/garment_gang/cache
 
 
-project: VLG
+project: vlg
 run_name: overfit
 run_id: null
 run_local_path: null

@@ -38,8 +38,8 @@ def collate_fn(
         sample_type_list.append(sample_type)
         image_path_list.append(image_path)
         images_list.append(image)
-        dialog = processor.apply_chat_template(dialog, tokenize=False)
-        question = processor.apply_chat_template(question, tokenize=False)
+        dialog = processor.apply_chat_template(dialog, tokenize=False, add_generation_prompt=False)
+        question = processor.apply_chat_template(question, tokenize=False, add_generation_prompt=True)
         n_question_pattern = question.count(DEFAULT_PLACEHOLDER_TOKEN)
         n_pattern = dialog.count(DEFAULT_PLACEHOLDER_TOKEN)
         assert n_pattern - n_question_pattern in [0, 1], "only support one or zero pattern output for now"
@@ -109,6 +109,7 @@ def collate_fn(
             "questions_list": question_list,
             "pattern_endpoint_masks": question_pattern_endpoints_mask,
             "pattern_transf_masks": question_pattern_transfs_mask,
+            "gt_ids": input_batch["input_ids"]
         })
     else:
         return_dict.update(input_batch)
