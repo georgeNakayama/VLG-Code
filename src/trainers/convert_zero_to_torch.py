@@ -13,13 +13,12 @@
 # example: python zero_to_fp32.py . pytorch_model.bin
 
 import argparse
-import torch
-import glob
-import math
-import os
-import re
 from collections import OrderedDict
 from dataclasses import dataclass
+import math
+import glob
+import os
+import re
 
 # while this script doesn't use deepspeed to recover data, since the checkpoints are pickled with
 # DeepSpeed data structures it has to be available in the current python environment.
@@ -27,27 +26,25 @@ from deepspeed.utils import logger
 from deepspeed.checkpoint.constants import (DS_VERSION, OPTIMIZER_STATE_DICT, SINGLE_PARTITION_OF_FP32_GROUPS,
                                             FP32_FLAT_GROUPS, ZERO_STAGE, PARTITION_COUNT, PARAM_SHAPES, BUFFER_NAMES,
                                             FROZEN_PARAM_SHAPES, FROZEN_PARAM_FRAGMENTS)
+import torch
 
 
 @dataclass
 class zero_model_state:
-    buffers: dict()
-    param_shapes: dict()
+    buffers: dict
+    param_shapes: dict
     shared_params: list
     ds_version: int
-    frozen_param_shapes: dict()
-    frozen_param_fragments: dict()
-
+    frozen_param_shapes: dict
+    frozen_param_fragments: dict
 
 debug = 0
 
 # load to cpu
 device = torch.device('cpu')
 
-
 def atoi(text):
     return int(text) if text.isdigit() else text
-
 
 def natural_keys(text):
     '''
@@ -56,7 +53,6 @@ def natural_keys(text):
     (See Toothy's implementation in the comments)
     '''
     return [atoi(c) for c in re.split(r'(\d+)', text)]
-
 
 def get_model_state_file(checkpoint_dir, zero_stage):
     if not os.path.isdir(checkpoint_dir):
@@ -73,7 +69,6 @@ def get_model_state_file(checkpoint_dir, zero_stage):
 
     return file
 
-
 def get_checkpoint_files(checkpoint_dir, glob_pattern):
     # XXX: need to test that this simple glob rule works for multi-node setup too
     ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, glob_pattern)), key=natural_keys)
@@ -83,14 +78,11 @@ def get_checkpoint_files(checkpoint_dir, glob_pattern):
 
     return ckpt_files
 
-
 def get_optim_files(checkpoint_dir):
     return get_checkpoint_files(checkpoint_dir, "*_optim_states.pt")
 
-
 def get_model_state_files(checkpoint_dir):
     return get_checkpoint_files(checkpoint_dir, "*_model_states.pt")
-
 
 def parse_model_states(files):
     zero_model_states = []
@@ -136,7 +128,6 @@ def parse_model_states(files):
         zero_model_states.append(z_model_state)
 
     return zero_model_states
-
 
 def parse_optim_states(files, ds_checkpoint_dir):
 
@@ -190,7 +181,6 @@ def parse_optim_states(files, ds_checkpoint_dir):
 
     return zero_stage, world_size, fp32_flat_groups
 
-
 def _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, exclude_frozen_parameters):
     """
     Returns fp32 state_dict reconstructed from ds checkpoint
@@ -216,7 +206,6 @@ def _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, exclude_frozen_
     elif zero_stage == 3:
         return _get_fp32_state_dict_from_zero3_checkpoint(world_size, fp32_flat_groups, zero_model_states,
                                                           exclude_frozen_parameters)
-
 
 def _zero2_merge_frozen_params(state_dict, zero_model_states):
     if zero_model_states[0].frozen_param_shapes is None or len(zero_model_states[0].frozen_param_shapes) == 0:
@@ -249,11 +238,9 @@ def _zero2_merge_frozen_params(state_dict, zero_model_states):
 
     print(f"Reconstructed Frozen fp32 state dict with {total_params} params {total_numel} elements")
 
-
 def _has_callable(obj, fn):
     attr = getattr(obj, fn, None)
     return callable(attr)
-
 
 def _zero2_merge_trainable_params(state_dict, world_size, fp32_flat_groups, zero_model_states):
     param_shapes = zero_model_states[0].param_shapes
@@ -327,7 +314,6 @@ def _zero2_merge_trainable_params(state_dict, world_size, fp32_flat_groups, zero
 
     print(f"Reconstructed fp32 state dict with {total_params} params {total_numel} elements")
 
-
 def _get_fp32_state_dict_from_zero2_checkpoint(world_size, fp32_flat_groups, zero_model_states,
                                                exclude_frozen_parameters):
     state_dict = OrderedDict()
@@ -350,13 +336,11 @@ def _get_fp32_state_dict_from_zero2_checkpoint(world_size, fp32_flat_groups, zer
 
     return state_dict
 
-
 def zero3_partitioned_param_info(unpartitioned_numel, world_size):
     remainder = unpartitioned_numel % world_size
     padding_numel = (world_size - remainder) if remainder else 0
     partitioned_numel = math.ceil(unpartitioned_numel / world_size)
     return partitioned_numel, padding_numel
-
 
 def _zero3_merge_frozen_params(state_dict, world_size, zero_model_states):
     if zero_model_states[0].frozen_param_shapes is None or len(zero_model_states[0].frozen_param_shapes) == 0:
@@ -392,7 +376,6 @@ def _zero3_merge_frozen_params(state_dict, world_size, zero_model_states):
             )
 
     print(f"Reconstructed Frozen fp32 state dict with {total_params} params {total_numel} elements")
-
 
 def _zero3_merge_trainable_params(state_dict, world_size, fp32_flat_groups, zero_model_states):
     param_shapes = zero_model_states[0].param_shapes
@@ -447,7 +430,6 @@ def _zero3_merge_trainable_params(state_dict, world_size, fp32_flat_groups, zero
 
     print(f"Reconstructed Trainable fp32 state dict with {total_params} params {total_numel} elements")
 
-
 def _get_fp32_state_dict_from_zero3_checkpoint(world_size, fp32_flat_groups, zero_model_states,
                                                exclude_frozen_parameters):
     state_dict = OrderedDict()
@@ -469,7 +451,6 @@ def _get_fp32_state_dict_from_zero3_checkpoint(world_size, fp32_flat_groups, zer
             state_dict[pair[0]] = state_dict[pair[1]]
 
     return state_dict
-
 
 def get_fp32_state_dict_from_zero_checkpoint(checkpoint_dir, tag=None, exclude_frozen_parameters=False):
     """
@@ -520,7 +501,6 @@ def get_fp32_state_dict_from_zero_checkpoint(checkpoint_dir, tag=None, exclude_f
 
     return _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir, exclude_frozen_parameters)
 
-
 def convert_zero_checkpoint_to_fp32_state_dict(checkpoint_dir, output_file, tag=None, exclude_frozen_parameters=False):
     """
     Convert ZeRO 2 or 3 checkpoint into a single fp32 consolidated ``state_dict`` file that can be
@@ -536,7 +516,6 @@ def convert_zero_checkpoint_to_fp32_state_dict(checkpoint_dir, output_file, tag=
     state_dict = get_fp32_state_dict_from_zero_checkpoint(checkpoint_dir, tag, exclude_frozen_parameters)
     print(f"Saving fp32 state dict to {output_file}")
     torch.save(state_dict, output_file)
-
 
 def load_state_dict_from_zero_checkpoint(model, checkpoint_dir, tag=None):
     """
@@ -575,7 +554,6 @@ def load_state_dict_from_zero_checkpoint(model, checkpoint_dir, tag=None):
     model.load_state_dict(state_dict, strict=False)
 
     return model
-
 
 if __name__ == "__main__":
 
