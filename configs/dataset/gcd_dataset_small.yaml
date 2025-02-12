@@ -4,8 +4,8 @@ root_dir: /scratch/m000051/garment_gang/data/garmentcodedata
 editing_dir: /scratch/m000051/garment_gang/data/garmentcodedata_editing
 caption_dir: /scratch/m000051/garment_gang/data/long-caption-processed
 editing_flip_prob: 0.5
-sampling_rate: [0.35, 0.15, 0.0, 0.5, 0.0]
+sampling_rate: [1.0, 0.0, 0.0, 0.0, 0.0]
 panel_classification: assets/panel_classes_garmentcodedata.json
 body_type: default_body
 datalist_file: assets/garmentcodedata_filtered_09142024.txt
-split_file: assets/garmentcodedata_datasplit.json
+split_file: assets/garmentcodedata_datasplit-small.json

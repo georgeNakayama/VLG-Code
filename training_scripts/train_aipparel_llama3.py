@@ -1,28 +1,23 @@
-import argparse
-import os
-import shutil
-import sys
-import time
-from functools import partial
-from dataclasses import dataclass, field, asdict
 import logging 
+from functools import partial
+from dataclasses import dataclass, field
 log = logging.getLogger(__name__)
-import hydra
+import os
 from typing import Literal
+
 import deepspeed
-import numpy as np
+import hydra
 import torch
-import tqdm
 import transformers
 from typing import Optional
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torch.distributed import init_process_group, destroy_process_group
 
-from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
-from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
 from data.collate_fns import collate_fn
+from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
 from trainers.evaluate import evaluate
+from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
 from trainers.generate import generate
 from trainers.train import train
 
@@ -42,56 +37,25 @@ class MainConfig:
     batch_size: int = 16
     optimizer: dict = field(default_factory=lambda: {"lr": 1e-4, "beta1": 0.9, "beta2": 0.999})
 
-@hydra.main(version_base=None, config_path='../configs', config_name='config')
-def main(cfg: MainConfig):
-    log.info(f"Working directory : {os.getcwd()}")
-    output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
-    log.info(f"Output directory : {output_dir}")
+def get_ddp_stats() -> tuple[int, int, int, bool]:
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
     ddp_world_size = int(os.environ['WORLD_SIZE'])
     master_process = (ddp_rank == 0)
-    
-    garment_tokenizer = hydra.utils.instantiate(
-        cfg.garment_tokenizer,
-    )
+    return ddp_rank, ddp_local_rank, ddp_world_size, master_process
 
-    
-    dataset_train = hydra.utils.instantiate(
-        cfg.dataset,
-        split="train"
-    )
-    
-    if ddp_rank == 0:
-        log.info(f"--> Training Set Length = {len(dataset_train)}")
-
-    dataset_val = hydra.utils.instantiate(
-        cfg.dataset,
-        split="val"
-    )
-    if ddp_rank == 0:
-        log.info(f"--> Validation Set Length = {len(dataset_val)}")
-    
-    # Create model
-    processor = transformers.AutoProcessor.from_pretrained(
-        cfg.version,
-    )
-    
-    # processor.tokenizer.add_tokens("<pad>", special_tokens=True)
+def add_tokens_to_garment_tokenizer(garment_tokenizer, processor):
     processor.tokenizer.pad_token = "<|finetune_right_pad_id|>"
     all_new_tokens = garment_tokenizer.get_all_token_names()
     num_added_tokens = processor.tokenizer.add_tokens(all_new_tokens, special_tokens=True)
-    if master_process:
-        log.info(f"Added {num_added_tokens} tokens to the tokenizer.")
     token_name2_idx_dict = {}
     for token in all_new_tokens:
         token_idx = processor.tokenizer(token, add_special_tokens=False).input_ids[0]
         token_name2_idx_dict[token] = token_idx
-        
-    if master_process:
-        log.info(f"Token name to index dictionary: {token_name2_idx_dict}")
     garment_tokenizer.set_token_indices(token_name2_idx_dict)
+    num_added_tokens, token_name2_idx_dict
 
+def get_model(cfg: MainConfig, ddp_local_rank) -> AIpparelMllavaNextForConditionalGeneration:
     torch_dtype = torch.float32
     if cfg.precision == "bf16":
         torch_dtype = torch.bfloat16
@@ -104,6 +68,18 @@ def main(cfg: MainConfig):
         **model_dict
     )
     
+    model.enable_input_require_grads()
+    model.gradient_checkpointing_enable()
+
+    vision_tower = model.vision_model
+    vision_tower.to(dtype=torch_dtype, device=ddp_local_rank)
+
+    for p in vision_tower.parameters():
+        p.requires_grad = False
+    for p in model.multi_modal_projector.parameters():
+        p.requires_grad = False
+
+def add_tokens_to_model_config(model: AIpparelMllavaNextForConditionalGeneration, garment_tokenizer) -> None:
     model.config.transf_token = PanelEdgeTypeV3.MOVE.value
     model.config.transf_token_index = garment_tokenizer.panel_edge_type_indices.move_idx
 
@@ -133,24 +109,52 @@ def main(cfg: MainConfig):
     
     model.config.zero_tensor = garment_tokenizer.get_zero_vertices()
 
-    model.enable_input_require_grads()
-    model.gradient_checkpointing_enable()
 
-    vision_tower = model.vision_model
-    vision_tower.to(dtype=torch_dtype, device=ddp_local_rank)
+@hydra.main(version_base=None, config_path='../configs', config_name='config')
+def main(cfg: MainConfig):
+    ddp_rank, ddp_local_rank, ddp_world_size, master_process = get_ddp_stats()
 
-    for p in vision_tower.parameters():
-        p.requires_grad = False
-    for p in model.multi_modal_projector.parameters():
-        p.requires_grad = False
-
-    model.resize_token_embeddings(len(processor.tokenizer) - model.vocab_size)
-    # for name, module in model.named_parameters():
-    #     print(name, module.shape, module.requires_grad)
+    output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    if master_process:
+        log.info(f"Working directory : {os.getcwd()}")
+        log.info(f"Output directory : {output_dir}")
+    
+    garment_tokenizer = hydra.utils.instantiate(
+        cfg.garment_tokenizer,
+    )
+    dataset_train = hydra.utils.instantiate(
+        cfg.dataset,
+        split="train"
+    )
+    dataset_val = hydra.utils.instantiate(
+        cfg.dataset,
+        split="val"
+    )
+    if master_process:
+        log.info(f"--> Training Set Length = {len(dataset_train)}")
+        log.info(f"--> Validation Set Length = {len(dataset_val)}")
+    
+    # Create model
+    processor = transformers.AutoProcessor.from_pretrained(
+        cfg.version,
+    )
+    
+    # processor.tokenizer.add_tokens("<pad>", special_tokens=True)
+    processor.tokenizer.pad_token = "<|finetune_right_pad_id|>"
+    num_added_tokens, token_name2_idx_dict = add_tokens_to_garment_tokenizer(garment_tokenizer, processor)
         
+    if master_process:
+        log.info(f"Added {num_added_tokens} tokens to the tokenizer.")
+        log.info(f"Token name to index dictionary: {token_name2_idx_dict}")
+       
+    model = get_model(cfg, garment_tokenizer, ddp_local_rank)
+    add_tokens_to_model_config(model, garment_tokenizer)
+    model.resize_token_embeddings(len(processor.tokenizer) - model.vocab_size)
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Total parameters: {total_params}, Trainable parameters: {trainable_params} ({trainable_params/total_params:.4f})")
+    if master_process:
+        log.info(f"Total parameters: {total_params}, Trainable parameters: {trainable_params} ({trainable_params/total_params:.4f})")
+
     if cfg.eval_only:
         init_process_group(backend="nccl")
         torch.cuda.set_device(ddp_local_rank)
@@ -180,9 +184,7 @@ def main(cfg: MainConfig):
             ddp_local_rank, 
             ddp_world_size
         )
-        pass
     elif cfg.gen_only:
-        # we don't use deepspeed for generation 
         init_process_group(backend="nccl")
         torch.cuda.set_device(ddp_local_rank)
         if cfg.gen_split == "train":
@@ -301,6 +303,7 @@ def main(cfg: MainConfig):
             ddp_world_size,
             output_dir
         )
+    destroy_process_group("nccl")
 
 
 if __name__ == "__main__":

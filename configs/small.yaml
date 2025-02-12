@@ -9,12 +9,12 @@ defaults:
 
 model:
   edge_loss_weight: 0.1
-  num_freq: 9
+  num_freq: 8
   num_regression_layers: 2
     # use_flash_attn: True
 
 optimizer: 
-  lr: 0.000006
+  lr: 0.00006
   beta1: .9
   beta2: 0.95
 
@@ -40,7 +40,7 @@ from_start: False
 resume: null
 
 grad_accumulation_steps: 8
-num_steps: 20000
+num_steps: 15000
 save_freq: 500
 warmup_steps: 0
 batch_size: 6
