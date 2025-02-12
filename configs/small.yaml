@@ -14,9 +14,9 @@ model:
     # use_flash_attn: True
 
 optimizer: 
-  lr: 0.00006
+  lr: 1e-5
   beta1: .9
-  beta2: 0.95
+  beta2: 0.99
 
 wandb_info:
   wandb_dir: /scratch/m000051/garment_gang
@@ -39,7 +39,7 @@ gen_split: val
 from_start: False
 resume: null
 
-grad_accumulation_steps: 8
+grad_accumulation_steps: 6
 num_steps: 15000
 save_freq: 500
 warmup_steps: 0
