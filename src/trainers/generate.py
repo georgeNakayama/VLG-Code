@@ -110,7 +110,7 @@ def generate(
             input_dict["pattern_transfs"] = None
 
         param_dict = {} 
-            
+
         output_tensor = model.generate(
             input_ids=input_dict["input_ids"],
             pixel_values=input_dict["pixel_values"],

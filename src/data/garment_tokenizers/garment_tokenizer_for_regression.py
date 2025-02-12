@@ -235,6 +235,7 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
                 edge_type = self.panel_edge_type_indices.get_index_token(panel[command].item())
                 param_array = param_dict.get(panel[command].item(), None)
                 if param_array is not None:
+                    assert len(param_array) > 0, f"The param array is too short for command: {command}"
                     params = param_array[0]
                     param_dict[panel[command].item()] = param_array[1:]
                 else:

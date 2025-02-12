@@ -569,14 +569,13 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                     mask = input_ids == ind
                     if not mask.any():
                         continue
-                    if ind != self.config.get_all_edge_indices(ret_dict=False)[0]:
-                        # if ind is one of the edge, not a transformation
-                        endpoints_mask |= mask
-                        if self.is_closure(ind):
-                            pattern_endpoints[mask] = self.config.zero_tensor.to(last_hidden_state)
-                        else:
-                            edge_embeds = last_hidden_state[mask]
-                            pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
+                    # if ind is one of the edge, not a transformation
+                    endpoints_mask |= mask
+                    if self.is_closure(ind):
+                        pattern_endpoints[mask] = self.config.zero_tensor.to(last_hidden_state)
+                    else:
+                        edge_embeds = last_hidden_state[mask]
+                        pattern_endpoints[mask] = self.regression_head(edge_embeds)[:, 7:9]
                         
                     panel_params = self.regression_head(last_hidden_state[mask])
 
@@ -611,7 +610,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         param_dict[ind] = panel_params
                     else:
                         param_dict[ind] = torch.cat([param_dict[ind], panel_params], dim=0)
-
+                    
             if pattern_transf_masks.any():
                 assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_transfs = torch.zeros(last_hidden_state.shape[0], last_hidden_state.shape[1], 7).to(last_hidden_state)
@@ -625,8 +624,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                     param_dict[ind] = pattern_transfs.reshape(-1, 7)
                 else:
                     param_dict[ind] = torch.cat([param_dict[ind], pattern_transfs.reshape(-1, 7)], dim=0)
-
-
 
         # TODO: we have no attention_mask so this won't work, check if we really won't need attention mask and find another way
         if attention_mask is not None and position_ids is None:
@@ -670,7 +667,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             model_inputs["pixel_values"] = pixel_values
             model_inputs["aspect_ratio_ids"] = aspect_ratio_ids
             model_inputs["aspect_ratio_mask"] = aspect_ratio_mask
-
+        
         return model_inputs
 
     def _update_model_kwargs_for_generation(self, outputs, model_kwargs, is_encoder_decoder, **kwargs):

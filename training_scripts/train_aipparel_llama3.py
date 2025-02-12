@@ -103,8 +103,6 @@ def main(cfg: MainConfig):
         cfg.version,
         **model_dict
     )
-    if master_process:
-        print(model)
     
     model.config.transf_token = PanelEdgeTypeV3.MOVE.value
     model.config.transf_token_index = garment_tokenizer.panel_edge_type_indices.move_idx
