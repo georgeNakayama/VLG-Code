@@ -14,28 +14,30 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torch.distributed import init_process_group, destroy_process_group
 
-from data.collate_fns import collate_fn
-from data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
-from trainers.evaluate import evaluate
-from models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
-from trainers.generate import generate
-from trainers.train import train
+from src.data.collate_fns import collate_fn
+from src.data.garment_tokenizers.default_garment_tokenizer import GarmentTokenizer
+from src.data.garment_tokenizers.special_tokens import PanelEdgeTypeV3
+from src.trainers.evaluate import evaluate
+from src.models.aipparel_llama3 import AIpparelMllavaNextForConditionalGeneration
+from src.trainers.generate import generate
+from src.trainers.train import train
 
 @dataclass
 class MainConfig:
     version: str
-    precision: Literal["bf16", "fp16"] = "bf16"
+    resume: Optional[str] = None
     eval_only: bool = False
     gen_only: bool = False
     gen_split: Literal["train", "val"] = "val"
-    resume: Optional[str] = None
     from_start: bool = False
-    grad_accumulation_steps: int = 1
-    num_steps: int = 10000
     warmup_steps: int = 100
-    save_freq: int = 500
+    num_steps: int = 10000
+    grad_accumulation_steps: int = 1
     batch_size: int = 16
+    precision: Literal["bf16", "fp16"] = "bf16"
     optimizer: dict = field(default_factory=lambda: {"lr": 1e-4, "beta1": 0.9, "beta2": 0.999})
+    tune_adaptor: bool = False
+    save_freq: int = 500
 
 def get_ddp_stats() -> tuple[int, int, int, bool]:
     ddp_rank = int(os.environ['RANK'])
@@ -44,7 +46,7 @@ def get_ddp_stats() -> tuple[int, int, int, bool]:
     master_process = (ddp_rank == 0)
     return ddp_rank, ddp_local_rank, ddp_world_size, master_process
 
-def add_tokens_to_garment_tokenizer(garment_tokenizer, processor) -> tuple[int, dict]:
+def add_tokens_to_garment_tokenizer(garment_tokenizer: GarmentTokenizer, processor) -> tuple[int, dict]:
     processor.tokenizer.pad_token = "<|finetune_right_pad_id|>"
     all_new_tokens = garment_tokenizer.get_all_token_names()
     num_added_tokens = processor.tokenizer.add_tokens(all_new_tokens, special_tokens=True)
@@ -76,12 +78,13 @@ def get_model(cfg: MainConfig, ddp_local_rank) -> AIpparelMllavaNextForCondition
 
     for p in vision_tower.parameters():
         p.requires_grad = False
-    for p in model.multi_modal_projector.parameters():
-        p.requires_grad = False
+    if not cfg.tune_adaptor:
+        for p in model.multi_modal_projector.parameters():
+            p.requires_grad = False
     
     return model
 
-def add_tokens_to_model_config(model: AIpparelMllavaNextForConditionalGeneration, garment_tokenizer) -> None:
+def add_tokens_to_model_config(model: AIpparelMllavaNextForConditionalGeneration, garment_tokenizer: GarmentTokenizer) -> None:
     model.config.transf_token = PanelEdgeTypeV3.MOVE.value
     model.config.transf_token_index = garment_tokenizer.panel_edge_type_indices.move_idx
 
@@ -200,9 +203,9 @@ def main(cfg: MainConfig):
     if master_process:
         log.info(f"Total parameters: {total_params}, Trainable parameters: {trainable_params} ({trainable_params/total_params:.4f})")
 
-    if not cfg.eval_only or cfg.gen_only:
+    if not (cfg.eval_only or cfg.gen_only):
         ds_config = get_deepspeed_config(cfg)
-        model_engine, optimizer, train_loader, scheduler = deepspeed.initialize(
+        model_engine, _, train_loader, scheduler = deepspeed.initialize(
             model=model,
             model_parameters=model.parameters(),
             training_data=dataset_train,
@@ -218,7 +221,6 @@ def main(cfg: MainConfig):
         train(
             cfg,
             model_engine, 
-            optimizer, 
             train_loader, 
             scheduler,
             garment_tokenizer,

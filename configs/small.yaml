@@ -44,6 +44,7 @@ num_steps: 15000
 save_freq: 500
 warmup_steps: 0
 batch_size: 6
+tune_adaptor: False
 
 hydra:
   run:

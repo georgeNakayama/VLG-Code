@@ -1,9 +1,18 @@
 from enum import Enum
+import logging
+
+log = logging.getLogger(__name__)
+import os
 
 import numpy as np
+from omegaconf import OmegaConf
 import torch
 import torch.distributed as dist
-import logging
+import wandb as wb
+
+from trainers.convert_zero_to_torch import _get_fp32_state_dict_from_zero_checkpoint
+
+
 def dict_to_cuda(input_dict):
     for k, v in input_dict.items():
         if isinstance(input_dict[k], torch.Tensor):
@@ -17,6 +26,7 @@ def dict_to_cuda(input_dict):
         elif isinstance(input_dict[k], dict):
             input_dict[k] = dict_to_cuda(input_dict[k])
     return input_dict
+
 
 def dict_to_cpu(input_dict):
     for k, v in input_dict.items():
@@ -32,6 +42,7 @@ def dict_to_cpu(input_dict):
             input_dict[k] = dict_to_cpu(input_dict[k])
     return input_dict
 
+
 def dict_to_dtype(input_dict, dtype=torch.float32):
     for k, v in input_dict.items():
         if isinstance(input_dict[k], torch.Tensor):
@@ -45,6 +56,11 @@ def dict_to_dtype(input_dict, dtype=torch.float32):
         elif isinstance(input_dict[k], dict):
             input_dict[k] = dict_to_dtype(input_dict[k])
     return input_dict
+
+
+def master_log(local_rank: int, logger: logging.Logger, *args):
+    if local_rank == 0:
+        logger.info(*args)
 
 
 class Summary(Enum):
@@ -76,6 +92,7 @@ class ProgressMeter(object):
         num_digits = len(str(num_batches // 1))
         fmt = "{:" + str(num_digits) + "d}"
         return "[" + fmt + "/" + fmt.format(num_batches) + "]"
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -142,8 +159,61 @@ class AverageMeter(object):
             raise ValueError("invalid summary type %r" % self.summary_type)
 
         return fmtstr.format(**self.__dict__)
-    
-    
-def master_log(local_rank: int, logger: logging.Logger, *args):
-    if local_rank == 0:
-        logger.info(*args)
+
+
+def start_experiment(
+    cfg,
+    model: torch.nn.Module,
+    ddp_rank: int,
+    ddp_world_size: int,
+    resume: os.PathLike,
+    from_start: bool,
+):
+    # resume deepspeed checkpoint
+    os.environ["WANDB_DIR"] = cfg.wandb_info.wandb_dir
+    os.environ["WANDB_CACHE_DIR"] = cfg.wandb_info.wandb_cache_dir
+    if ddp_rank == 0:
+        config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+        wb.init(
+            name=cfg.run_name,
+            project=cfg.project,
+            config=config,
+            resume="allow",
+            id=cfg.run_id,  # Resuming functionality
+            dir=cfg.run_local_path,
+        )
+
+    start_step = 0
+    if resume:
+        latest_path = os.path.join(resume, "latest")
+        if os.path.isfile(latest_path):
+            with open(latest_path, "r") as fd:
+                tag = fd.read().strip()
+        else:
+            raise ValueError(f"Unable to find 'latest' file at {latest_path}")
+
+        ds_checkpoint_dir = os.path.join(resume, tag)
+        if from_start or (
+            os.path.isdir(ds_checkpoint_dir)
+            and len(os.listdir(ds_checkpoint_dir)) != ddp_world_size + 1
+        ):
+            state_dict = _get_fp32_state_dict_from_zero_checkpoint(
+                ds_checkpoint_dir, True
+            )
+            model.module.load_state_dict(state_dict, strict=False)
+        else:
+            _, _ = model.load_checkpoint(resume)
+
+        with open(os.path.join(resume, "latest"), "r") as f:
+            ckpt_dir = f.readlines()[0].strip()
+        if not from_start:
+            start_step = int(ckpt_dir.replace("global_step", ""))
+        if ddp_rank == 0:
+            log.info(
+                "resume training from {}, start from epoch {}".format(
+                    resume, start_step
+                )
+            )
+    if ddp_rank == 0:
+        wb.watch(model, log="all")
+    return start_step

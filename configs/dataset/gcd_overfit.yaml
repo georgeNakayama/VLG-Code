@@ -7,5 +7,4 @@ editing_flip_prob: 0.5
 sampling_rate: [1, 0, 0, 0, 0]
 panel_classification: assets/panel_classes_garmentcodedata.json
 body_type: default_body
-datalist_file: assets/garmentcodedata_filtered_09142024.txt
 split_file: assets/garmentcodedata_datasplit-overfit.json

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Literal, List
+from typing import List
+
 
 class BaseEncoding(nn.Module):
     """Multi-scale sinusoidal encodings. Support ``integrated positional encodings`` if covariances are provided.
@@ -23,7 +24,6 @@ class BaseEncoding(nn.Module):
         self.include_input = include_input
         self.in_dim = in_dim
 
-
     def get_out_dim(self) -> int:
         pass
 
@@ -32,6 +32,7 @@ class BaseEncoding(nn.Module):
         in_tensor: torch.Tensor,
     ) -> torch.Tensor:
         pass
+
 
 class SinusoidalEncoding(BaseEncoding):
     """Multi-scale sinusoidal encodings. Support ``integrated positional encodings`` if covariances are provided.
@@ -57,7 +58,6 @@ class SinusoidalEncoding(BaseEncoding):
         self.num_frequencies = num_frequencies
         self.min_freq = min_freq_exp
         self.max_freq = max_freq_exp
-
 
     def get_out_dim(self) -> int:
         if self.in_dim is None:
@@ -86,15 +86,24 @@ class SinusoidalEncoding(BaseEncoding):
             return in_tensor if self.include_input else torch.zeros_like(in_tensor)
         dtype = in_tensor.dtype
         scaled_in_tensor = 2 * torch.pi * in_tensor  # scale to [0, 2pi]
-        freqs = 2 ** torch.linspace(self.min_freq, self.max_freq, self.num_frequencies, device=in_tensor.device)
-        scaled_inputs = scaled_in_tensor[..., None] * freqs  # [..., "input_dim", "num_scales"]
-        scaled_inputs = scaled_inputs.view(*scaled_inputs.shape[:-2], -1)  # [..., "input_dim" * "num_scales"]
+        freqs = 2 ** torch.linspace(
+            self.min_freq, self.max_freq, self.num_frequencies, device=in_tensor.device
+        )
+        scaled_inputs = (
+            scaled_in_tensor[..., None] * freqs
+        )  # [..., "input_dim", "num_scales"]
+        scaled_inputs = scaled_inputs.view(
+            *scaled_inputs.shape[:-2], -1
+        )  # [..., "input_dim" * "num_scales"]
 
-        encoded_inputs = torch.sin(torch.cat([scaled_inputs, scaled_inputs + torch.pi / 2.0], dim=-1)).to(dtype)
+        encoded_inputs = torch.sin(
+            torch.cat([scaled_inputs, scaled_inputs + torch.pi / 2.0], dim=-1)
+        ).to(dtype)
         if self.include_input:
             encoded_inputs = torch.cat([encoded_inputs, in_tensor], dim=-1)
         return encoded_inputs
-    
+
+
 class DiscreteEncoding(BaseEncoding):
     """Multi-scale sinusoidal encodings. Support ``integrated positional encodings`` if covariances are provided.
     Each axis is encoded with frequencies ranging from 2^min_freq_exp to 2^max_freq_exp.
@@ -120,15 +129,23 @@ class DiscreteEncoding(BaseEncoding):
         self.bounds = min_bounds + max_bounds
         assert len(self.bounds) == in_dim * 2
         self.out_dim = out_dim
-        self.embedding_proj = nn.Embedding(bin_num*in_dim, out_dim)
+        self.embedding_proj = nn.Embedding(bin_num * in_dim, out_dim)
 
     def get_out_dim(self) -> int:
         return self.out_dim
+
     def forward(self, in_tensor: torch.Tensor):
         assert in_tensor.shape[-1] == self.in_dim
         bounds = torch.tensor(self.bounds).to(in_tensor)
-        ids = (in_tensor - bounds[:self.in_dim]) / (bounds[self.in_dim:] - bounds[:self.in_dim]) * (self.bin_num - 1)
+        ids = (
+            (in_tensor - bounds[: self.in_dim])
+            / (bounds[self.in_dim :] - bounds[: self.in_dim])
+            * (self.bin_num - 1)
+        )
         ids = ids.long()
-        ids = ids.clamp(0, self.bin_num-1) + torch.arange(self.in_dim).to(ids) * self.bin_num
+        ids = (
+            ids.clamp(0, self.bin_num - 1)
+            + torch.arange(self.in_dim).to(ids) * self.bin_num
+        )
         embedding = self.embedding_proj(ids).mean(-2)
         return embedding

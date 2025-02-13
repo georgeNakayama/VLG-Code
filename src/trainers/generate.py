@@ -28,6 +28,7 @@ def _start_experiment(
             resume='allow', id=cfg.run_id,    # Resuming functionality
             dir=cfg.run_local_path
         )
+    start_step = 0
     if resume:
         latest_path = os.path.join(resume, 'latest')
         if os.path.isfile(latest_path):
@@ -52,8 +53,6 @@ def _start_experiment(
                     resume, start_step
                 )
             )
-    else:
-        return 0
     if ddp_rank == 0:
         wb.watch(model, log='all')
     return start_step
