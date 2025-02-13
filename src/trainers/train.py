@@ -127,6 +127,7 @@ def _fit_loop(
     train_sampler.set_epoch(current_epoch)
     loader_iter = iter(loader)
 
+    model.module.initialize_weights_for_panel_modules()
     for step in range(start_step, num_steps):
         is_last_step = step == num_steps - 1
         for i in range(grad_accumulation_steps):

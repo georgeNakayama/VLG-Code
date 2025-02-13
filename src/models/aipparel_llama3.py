@@ -12,18 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch Llava-NeXT model."""
+"""AIpparel LLaMA Model"""
 
-import math
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union, Dict
 
-import numpy as np
 import torch
 import torch.utils.checkpoint
 from torch import nn
-from enum import Enum
 
 from transformers.modeling_outputs import ModelOutput
 
@@ -34,9 +31,10 @@ def make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0):
     """ Very simple multi-layer perceptron (also called FFN)"""
     h = [input_dim] + [hidden_dim] * (num_layers - 1)
     layers = []
+    layers.append(nn.LayerNorm(input_dim))
     for i in range(num_layers - 1):
         layers.append(nn.Linear(h[i], h[i +1]))
-        layers.append(nn.ReLU(inplace=True))
+        layers.append(nn.GELU())
     layers.append(nn.Linear(h[-1], output_dim))
     layers.append(nn.Dropout(dropout))
     return nn.Sequential(*layers)
@@ -214,6 +212,11 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         super().__init__(config)
         self.initialize_panel_edge_modules()
     
+    def initialize_weights_for_panel_modules(self):
+        self.regression_head[-2].weight.data.zero_()
+        self.vertex_proj[-1].weight.data.zero_()
+        self.transf_proj[-1].weight.data.zero_()
+
     def initialize_panel_edge_modules(self):
         self.regression_head = make_mlp(
             self.config.text_config.hidden_size, 
@@ -256,10 +259,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 self.config.text_config.hidden_size
                 )
         )
-        
-        self.regression_head[-2].weight.data.zero_()
-        self.vertex_proj[-1].weight.data.zero_()
-        self.transf_proj[-1].weight.data.zero_()
 
     def resize_token_embeddings(self, new_num_tokens: int):
         # mysterious 8
