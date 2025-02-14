@@ -167,6 +167,7 @@ def _fit_loop(
                 pattern_endpoint_masks=input_dict["pattern_endpoint_masks"],
                 pattern_transfs=input_dict["pattern_transfs"],
                 pattern_transf_masks=input_dict["pattern_transf_masks"],
+                train_step=step,
             )
 
             loss = output.loss
@@ -178,7 +179,8 @@ def _fit_loop(
             batch_time_meter.update(time.time() - start_time)
             total_loss_meter.update(loss.mean(), batch_size)
             ce_loss_meter.update(ce_loss.mean(), batch_size)
-            edge_loss_meter.update(edge_loss.mean(), batch_size)
+            if edge_loss is not None:
+                edge_loss_meter.update(edge_loss.mean(), batch_size)
 
             for k, meter in edge_type_loss_meters.items():
                 if f"{k}_loss" in output.edge_type_losses.keys():
@@ -192,9 +194,11 @@ def _fit_loop(
                 mode_batch_size = mask.sum()
                 modewise_total_loss_meters[i].update(loss[mask].mean(), mode_batch_size)
                 modewise_ce_loss_meters[i].update(ce_loss[mask].mean(), mode_batch_size)
-                modewise_edge_loss_meters[i].update(
-                    edge_loss[mask].mean(), mode_batch_size
-                )
+
+                if edge_loss is not None:
+                    modewise_edge_loss_meters[i].update(
+                        edge_loss[mask].mean(), mode_batch_size
+                    )
 
         # logging
         if ddp_world_size > 1:

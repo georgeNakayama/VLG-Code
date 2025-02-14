@@ -310,7 +310,9 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         pattern_endpoints: Optional[torch.FloatTensor] = None,
         pattern_endpoint_masks: Optional[torch.BoolTensor] = None,
         pattern_transfs: Optional[torch.FloatTensor] = None,
-        pattern_transf_masks: Optional[torch.BoolTensor] = None
+        pattern_transf_masks: Optional[torch.BoolTensor] = None,
+
+        train_step = None,
     ) -> Union[Tuple, AIpparelMllamaCausalLMOutputWithPast]:
         r"""
         Args:
@@ -457,7 +459,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             # Regression loss
             last_hidden_state = outputs.hidden_states[-1]
             param_preds = {k:torch.zeros_like(v) for k,v in pattern_params.items()}
-            if pattern_params_mask is not None:
+            if pattern_params_mask is not None and train_step > 200:
                 edge_loss = 0
                 for edge_type, ind in self.config.get_all_edge_indices(ret_dict=True).items():
                     mask = labels[..., 1:] == ind
@@ -466,7 +468,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         edge_type_losses[f"{edge_type}_loss"] = torch.zeros(1).to(last_hidden_state.device)
                         continue
                     panel_embeds = last_hidden_state[mask]
-                    panel_params = self.regression_head(panel_embeds)
+                    panel_params = self.regression_head(panel_embeds.detach())
                     if ind == self.config.cline_token_index:
                         continue
                     if ind == self.config.transf_token_index:
@@ -500,6 +502,8 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                     edge_type_losses[f"{edge_type}_loss"] = loss.mean()
                 
                 total_loss = self.config.edge_loss_weight * edge_loss
+            else:
+                total_loss = 0
             
             total_loss += ce_loss
 

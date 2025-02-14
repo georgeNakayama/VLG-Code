@@ -230,7 +230,6 @@ def main(cfg: MainConfig):
         )
     else:
         assert not (cfg.eval_only and cfg.gen_only), "Only eval or gen can be set at a time!"
-        assert not cfg.eval_only or cfg.gen_split == "val", "Only perform eval on the val dataset!"
 
         init_process_group(backend="nccl")
         torch.cuda.set_device(ddp_local_rank)
@@ -250,7 +249,7 @@ def main(cfg: MainConfig):
                 processor=processor,
                 garment_tokenizer=garment_tokenizer,
                 model_version=cfg.version,
-                inference=cfg.eval_only
+                inference=cfg.gen_only
             ),
         )
         if cfg.eval_only:
