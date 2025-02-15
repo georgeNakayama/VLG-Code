@@ -117,6 +117,7 @@ def evaluate(
                 pattern_endpoint_masks=input_dict["pattern_endpoint_masks"],
                 pattern_transfs=input_dict["pattern_transfs"],
                 pattern_transf_masks=input_dict["pattern_transf_masks"],
+                train_step=10000
             )
             
             loss = output.loss

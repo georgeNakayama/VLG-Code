@@ -66,6 +66,16 @@ def _prepare_cross_attention_mask(
 
     return cross_attention_mask, full_text_row_masked_out_mask
 
+def _discretize(x, bin, bounds, dim):
+    min_bounds = torch.tensor(bounds[:dim]).cuda()
+    max_bounds = torch.tensor(bounds[dim:]).cuda()
+    x = torch.minimum(max_bounds.cuda(), x)
+    x = torch.maximum(min_bounds.cuda(), x)
+    x = (x - min_bounds) / (max_bounds - min_bounds)
+    x = torch.round(x * 256) / 256
+    x = x * (max_bounds - min_bounds) + min_bounds
+    return x
+
 
 class AIpparelMllamaNextConfig(MllamaConfig):
     model_type = "aipparel_llama3"
@@ -132,6 +142,10 @@ class AIpparelMllamaNextConfig(MllamaConfig):
         self.carc_token_index = carc_token_index
         
         self.zero_tensor = zero_tensor
+
+        self.bin_num = 128
+        self.verts_bounds = [-4, -4, 4, 4]
+        self.transf_bounds = [-4, -4, -4, -1, -1, -1, -1, 4, 4, 4, 1, 1, 1, 1]
         
         
     def get_all_edge_indices(self, ret_dict=True):
@@ -218,6 +232,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         self.transf_proj[-1].weight.data.zero_()
 
     def initialize_panel_edge_modules(self):
+
         self.regression_head = make_mlp(
             self.config.text_config.hidden_size, 
             self.config.text_config.hidden_size,
@@ -313,6 +328,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         pattern_transf_masks: Optional[torch.BoolTensor] = None,
 
         train_step = None,
+        ddp_rank = None,
     ) -> Union[Tuple, AIpparelMllamaCausalLMOutputWithPast]:
         r"""
         Args:
@@ -412,12 +428,14 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 assert edge_mask.sum() == pattern_endpoint_masks.sum(), "edge mask has shape {} but endpoints mask has shape {}" \
                     .format(edge_mask.sum(), pattern_endpoint_masks.sum())
                 _endpoints = pattern_endpoints[pattern_endpoint_masks]
+                _endpoints = _discretize(_endpoints, self.config.bin_num, self.config.verts_bounds, 2)
                 edge_embeds = self.vertex_proj(self.vertex_encoding(_endpoints))
                 inputs_embeds[edge_mask] = inputs_embeds[edge_mask] + edge_embeds
                     
             if (transf_mask is not None and pattern_transfs is not None and pattern_transf_masks is not None):
                 assert transf_mask.sum() == pattern_transf_masks.sum()
                 _transformations = pattern_transfs[pattern_transf_masks]
+                _transformations = _discretize(_transformations, self.config.bin_num, self.config.verts_bounds, 7)
                 transf_embeds = self.transf_proj(torch.cat([self.trasl_encoding(_transformations[:, :3]), _transformations[:, 3:]], dim=1))
                 inputs_embeds[transf_mask] = inputs_embeds[transf_mask] + transf_embeds
 
@@ -501,7 +519,11 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                     edge_loss += loss
                     edge_type_losses[f"{edge_type}_loss"] = loss.mean()
                 
-                total_loss = self.config.edge_loss_weight * edge_loss
+                if train_step > 200 and train_step < 300:
+                    weight = 0.01 * (train_step - 200)
+                else:
+                    weight = 1
+                total_loss = weight * self.config.edge_loss_weight * edge_loss
             else:
                 total_loss = 0
             
@@ -538,6 +560,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         num_logits_to_keep=None,
         last_hidden_state=None,
         param_dict=defaultdict(torch.Tensor),
+        ddp_rank=None,
         **kwargs,
     ):
 
@@ -559,6 +582,9 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         endpoints_mask = None
         pattern_endpoints = None
         pattern_transfs = None
+
+        # if ddp_rank == 0:
+        #     import ipdb; ipdb.set_trace()
         if last_hidden_state is not None:
             pattern_transf_masks = input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
             pattern_endpoint_masks = torch.isin(input_ids, torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(input_ids))
@@ -661,6 +687,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 "pattern_endpoint_masks": endpoints_mask,
                 "pattern_transfs": pattern_transfs,
                 "pattern_transf_masks": transformations_mask,
+                "ddp_rank": ddp_rank,
             }
         )
 

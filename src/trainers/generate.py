@@ -123,6 +123,7 @@ def generate(
             pattern_transf_masks=input_dict["pattern_transf_masks"],
             param_dict=param_dict,
             max_new_tokens=2100,
+            ddp_rank=ddp_rank,
         )
         param_dict = dict_to_dtype(param_dict) # to torch.floar32
         param_dict = dict_to_cpu(param_dict)

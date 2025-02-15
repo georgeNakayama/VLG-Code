@@ -33,15 +33,15 @@ version: meta-llama/Llama-3.2-11B-Vision-Instruct
 precision: bf16
 eval_only: False
 gen_only: False
-gen_split: val
+gen_split: train
 
 # training
 from_start: False
 resume: null
 
 grad_accumulation_steps: 6
-num_steps: 15000
-save_freq: 500
+num_steps: 10000
+save_freq: 200
 warmup_steps: 0
 batch_size: 6
 tune_adaptor: False

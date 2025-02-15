@@ -5,6 +5,7 @@ import os
 import time
 
 import torch
+import torch.distributed as dist
 import wandb as wb
 
 from trainers.utils import dict_to_cuda, start_experiment, AverageMeter, ProgressMeter
@@ -44,7 +45,7 @@ def train(
 
 
 def _fit_loop(
-    model: torch.nn.Module,
+    model,
     loader,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     garment_tokenizer,
@@ -168,7 +169,9 @@ def _fit_loop(
                 pattern_transfs=input_dict["pattern_transfs"],
                 pattern_transf_masks=input_dict["pattern_transf_masks"],
                 train_step=step,
+                ddp_rank=ddp_rank,
             )
+            dist.barrier()
 
             loss = output.loss
             model.backward(loss.mean())
