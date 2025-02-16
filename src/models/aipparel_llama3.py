@@ -34,7 +34,7 @@ def make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0):
     layers.append(nn.LayerNorm(input_dim))
     for i in range(num_layers - 1):
         layers.append(nn.Linear(h[i], h[i +1]))
-        layers.append(nn.GELU())
+        layers.append(nn.LeakyReLU())
     layers.append(nn.Linear(h[-1], output_dim))
     layers.append(nn.Dropout(dropout))
     return nn.Sequential(*layers)
@@ -66,7 +66,7 @@ def _prepare_cross_attention_mask(
 
     return cross_attention_mask, full_text_row_masked_out_mask
 
-def _discretize(x, bin, bounds, dim):
+def _discretize(x, bounds, dim):
     min_bounds = torch.tensor(bounds[:dim]).cuda()
     max_bounds = torch.tensor(bounds[dim:]).cuda()
     x = torch.minimum(max_bounds.cuda(), x)
@@ -428,14 +428,14 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 assert edge_mask.sum() == pattern_endpoint_masks.sum(), "edge mask has shape {} but endpoints mask has shape {}" \
                     .format(edge_mask.sum(), pattern_endpoint_masks.sum())
                 _endpoints = pattern_endpoints[pattern_endpoint_masks]
-                _endpoints = _discretize(_endpoints, self.config.bin_num, self.config.verts_bounds, 2)
+                # _endpoints = _discretize(_endpoints, self.config.verts_bounds, 2)
                 edge_embeds = self.vertex_proj(self.vertex_encoding(_endpoints))
                 inputs_embeds[edge_mask] = inputs_embeds[edge_mask] + edge_embeds
                     
             if (transf_mask is not None and pattern_transfs is not None and pattern_transf_masks is not None):
                 assert transf_mask.sum() == pattern_transf_masks.sum()
                 _transformations = pattern_transfs[pattern_transf_masks]
-                _transformations = _discretize(_transformations, self.config.bin_num, self.config.verts_bounds, 7)
+                # _transformations = _discretize(_transformations, self.config.transf_bounds, 7)
                 transf_embeds = self.transf_proj(torch.cat([self.trasl_encoding(_transformations[:, :3]), _transformations[:, 3:]], dim=1))
                 inputs_embeds[transf_mask] = inputs_embeds[transf_mask] + transf_embeds
 
@@ -477,7 +477,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             # Regression loss
             last_hidden_state = outputs.hidden_states[-1]
             param_preds = {k:torch.zeros_like(v) for k,v in pattern_params.items()}
-            if pattern_params_mask is not None and train_step > 200:
+            if pattern_params_mask is not None and train_step > 300:
                 edge_loss = 0
                 for edge_type, ind in self.config.get_all_edge_indices(ret_dict=True).items():
                     mask = labels[..., 1:] == ind
@@ -486,7 +486,8 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                         edge_type_losses[f"{edge_type}_loss"] = torch.zeros(1).to(last_hidden_state.device)
                         continue
                     panel_embeds = last_hidden_state[mask]
-                    panel_params = self.regression_head(panel_embeds.detach())
+                    # panel_embeds = panel_embeds.clone().detach()
+                    panel_params = self.regression_head(panel_embeds)
                     if ind == self.config.cline_token_index:
                         continue
                     if ind == self.config.transf_token_index:

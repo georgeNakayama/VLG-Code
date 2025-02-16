@@ -9,7 +9,7 @@ defaults:
 
 model:
   edge_loss_weight: 0.1
-  num_freq: 8
+  num_freq: 0
   num_regression_layers: 2
     # use_flash_attn: True
 
@@ -39,8 +39,8 @@ gen_split: train
 from_start: False
 resume: null
 
-grad_accumulation_steps: 6
-num_steps: 10000
+grad_accumulation_steps: 8
+num_steps: 2000
 save_freq: 200
 warmup_steps: 0
 batch_size: 6

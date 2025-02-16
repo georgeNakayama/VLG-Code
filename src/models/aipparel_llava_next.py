@@ -199,8 +199,6 @@ class AIpparelLlavaNextForConditionalGeneration(LlavaNextForConditionalGeneratio
             self.config.num_regression_layers
         )
 
-
-
         self.vertex_encoding = SinusoidalEncoding(
             in_dim=2,
             num_frequencies=self.config.num_freq,

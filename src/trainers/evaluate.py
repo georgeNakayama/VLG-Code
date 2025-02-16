@@ -61,7 +61,7 @@ def evaluate(
         cfg.resume)
     
     mode_names = loader.dataset.get_mode_names()
-    cast_dtype = torch.half if cfg.precision == "fp16" else (torch.bfloat16 if cfg.precision == "bf16" else torch.float32)
+    cast_dtype = torch.float32
     model = model.to(f"cuda:{ddp_rank}")
     model.eval()
     model = model.to(cast_dtype)

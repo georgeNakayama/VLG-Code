@@ -217,9 +217,10 @@ class GarmentCodeData(Dataset):
                 questions.append(
                     [{"type": "image"}, {"type": "text", "text": question_template}]
                 )
-                answer_template = random.choice(self.answer_list).format(
-                    pattern=DEFAULT_PLACEHOLDER_TOKEN
-                )
+                # answer_template = random.choice(self.answer_list).format(
+                #     pattern=DEFAULT_PLACEHOLDER_TOKEN
+                # )
+                answer_template=DEFAULT_PLACEHOLDER_TOKEN
                 answers.append([{"type": "text", "text": answer_template}])
             out_pattern = [
                 (
