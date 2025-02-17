@@ -128,12 +128,13 @@ def _fit_loop(
     train_sampler.set_epoch(current_epoch)
     loader_iter = iter(loader)
 
-    if start_step <= 200:
-        model.module.initialize_weights_for_panel_modules()
+    model.module.initialize_weights_for_panel_modules(start_step)
+
     for step in range(start_step, num_steps):
-        is_last_step = step == num_steps - 1
         for i in range(grad_accumulation_steps):
             start_time = time.time()
+
+            # Logic for loading new datapoints and shuffling if epoch done
             try:
                 input_dict = next(loader_iter)
             except StopIteration:
@@ -221,5 +222,6 @@ def _fit_loop(
             if ddp_rank == 0:
                 wb.log({"train/lr": curr_lr[0]}, step)
 
+        is_last_step = step == num_steps - 1
         if (step % save_freq == 0 and step > 0) or is_last_step:
             model.save_checkpoint(os.path.join(log_dir, f"ckpt_{step}"))

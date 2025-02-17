@@ -159,6 +159,9 @@ class AIpparelMllamaNextConfig(MllamaConfig):
         self.discretize_params = discretize_params
         self.detach_regression = detach_regression
 
+        self.regression_loss_from = 200
+        self.regression_loss_warmup_steps = 100
+
     def get_all_edge_indices(self, ret_dict=True):
         if ret_dict:
             return {
@@ -237,10 +240,11 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         super().__init__(config)
         self.initialize_panel_edge_modules()
 
-    def initialize_weights_for_panel_modules(self):
-        self.regression_head[-2].weight.data.zero_()
-        self.vertex_proj[-1].weight.data.zero_()
-        self.transf_proj[-1].weight.data.zero_()
+    def initialize_weights_for_panel_modules(self, step):
+        if step < self.config.regression_loss_from:
+            self.regression_head[-2].weight.data.zero_()
+            self.vertex_proj[-1].weight.data.zero_()
+            self.transf_proj[-1].weight.data.zero_()
 
     def initialize_panel_edge_modules(self):
 
@@ -565,7 +569,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             # Regression loss
             last_hidden_state = outputs.hidden_states[-1]
             param_preds = {k: torch.zeros_like(v) for k, v in pattern_params.items()}
-            if pattern_params_mask is not None and train_step > 300:
+            if pattern_params_mask is not None and train_step > self.config.regression_loss_from:
                 edge_loss = 0
                 for edge_type, ind in self.config.get_all_edge_indices(
                     ret_dict=True
@@ -617,8 +621,8 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                     edge_loss += loss
                     edge_type_losses[f"{edge_type}_loss"] = loss.mean()
 
-                if train_step > 200 and train_step < 300:
-                    weight = 0.01 * (train_step - 200)
+                if train_step > self.config.regression_loss_from and train_step < self.config.regression_loss_from + self.config.regression_loss_warmup_steps:
+                    weight = 1/self.config.regression_loss_warmup_steps * (train_step - self.config.regression_loss_from)
                 else:
                     weight = 1
                 total_loss = weight * self.config.edge_loss_weight * edge_loss
