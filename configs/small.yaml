@@ -11,12 +11,11 @@ model:
   edge_loss_weight: 0.1
   num_freq: 0
   num_regression_layers: 2
-    # use_flash_attn: True
 
 optimizer: 
   lr: 1e-5
   beta1: .9
-  beta2: 0.99
+  beta2: 0.95
 
 wandb_info:
   wandb_dir: /scratch/m000051/garment_gang

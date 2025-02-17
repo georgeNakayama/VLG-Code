@@ -172,7 +172,6 @@ def _fit_loop(
                 train_step=step,
                 ddp_rank=ddp_rank,
             )
-            dist.barrier()
 
             loss = output.loss
             model.backward(loss.mean())
