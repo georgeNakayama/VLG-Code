@@ -10,6 +10,9 @@ DEFAULT_IM_START_TOKEN = "<im_start>"
 DEFAULT_IM_END_TOKEN = "<im_end>"
 DEFAULT_PLACEHOLDER_TOKEN = "<placeholder>"
 
+LLAMA_EOT_INDEX = 128009
+LLAMA_IMAGE_INDEX = 128256
+
 # HMR_SHORT_QUESTION_LIST = [
 #     "Can you give the SMPL pose of this person?",
 #     "Please output this person's SMPL pose.",
