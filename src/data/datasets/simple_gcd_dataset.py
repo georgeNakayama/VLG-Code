@@ -140,7 +140,7 @@ class SimpleGarmentCodeData(torch.utils.data.Dataset):
             text = captions["description"]
             question_template = question_template.format(sent=text)
 
-        question = [{"type": "image"}, {"type": "text", "text": question_template}],
+        question = [{"type": "image"}, {"type": "text", "text": question_template}]
         
         answer_template = random.choice(ANSWER_LIST).format(
             pattern=DEFAULT_PLACEHOLDER_TOKEN
