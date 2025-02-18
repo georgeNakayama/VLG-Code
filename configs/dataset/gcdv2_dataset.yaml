@@ -1,0 +1,7 @@
+_target_: data.datasets.simple_gcd_dataset.SimpleGarmentCodeData
+
+root_dir: /scratch/m000051/garment_gang/data/garmentcodedatav2
+caption_dir: /scratch/m000051/garment_gang/data/long-caption-processed
+sampling_rate: [0.5, 0.3, 0.2]
+panel_classification: assets/panel_classes_garmentcodedata.json
+split_file: assets/garmentcodedatav2_datasplit.json
