@@ -11,10 +11,12 @@ model:
   edge_loss_weight: 0.1
   num_freq: 0
   num_regression_layers: 2
+  regression_loss_from: 200
   discretize_params: True
+  use_layer_norm: True
 
 optimizer: 
-  lr: 1e-5
+  lr: 3e-5
   beta1: .9
   beta2: 0.99
 
@@ -40,11 +42,13 @@ from_start: False
 resume: null
 
 tune_adaptor: False
-grad_accumulation_steps: 8
-num_steps: 2000
+grad_accumulation_steps: 3
+num_steps: 5000
 save_freq: 200
-warmup_steps: 0
 batch_size: 6
+warmup_steps: 0
+
+# Effective batch-size = 8 * 8 * 6 * 3 = 1152
 
 hydra:
   run:

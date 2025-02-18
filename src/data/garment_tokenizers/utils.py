@@ -205,7 +205,13 @@ def _point_in_3D(local_coord, rotation, translation):
     return rotated_point + translation
 
 def stitching_key_func(class_order: list, stitch: list):
+    stitch = [s for s in stitch if isinstance(s, dict)]
+    assert len(stitch) == 2, f"Stitch is wrong length {len(stitch)}, {stitch}"
+    assert len(class_order) > 0
     def to_score(s):
+        assert type(s) == dict
+        assert 'panel' in s
+        assert 'edge' in s
         return (class_order.index(s['panel']), s['edge'])
     values = [to_score(s) for s in stitch]
     return min(values)
