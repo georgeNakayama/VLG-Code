@@ -203,3 +203,9 @@ def _point_in_3D(local_coord, rotation, translation):
 
     # translate
     return rotated_point + translation
+
+def stitching_key_func(class_order: list, stitch: list):
+    def to_score(s):
+        return (class_order.index(s['panel']), s['edge'])
+    values = [to_score(s) for s in stitch]
+    return min(values)

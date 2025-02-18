@@ -1,4 +1,5 @@
 from collections import defaultdict
+import functools
 import logging
 
 log = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ from data.garment_tokenizers.utils import (
     arc_from_three_points,
     panel_universal_transtation,
     is_colinear,
+    stitching_key_func,
 )
 from data.datasets.utils import IMAGE_TOKEN_INDEX
 from data.patterns.sf_pattern.pattern_converter import (
@@ -41,6 +43,7 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
         sf_only=False,
         include_template_name=False,
         encode_stitches_as_tags=True,
+        order_stitches=True,
     ):
         super().__init__(
             standardize=standardize,
@@ -52,6 +55,7 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
             include_template_name=include_template_name,
             encode_stitches_as_tags=encode_stitches_as_tags,
         )
+        self.order_stitches = order_stitches
 
     def get_bin_token_names(self):
         return []
@@ -120,6 +124,11 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
             if isinstance(pattern, SF_SewingPattern)
             else self._pattern_as_list_gcd(pattern, as_quat=True, endpoint_first=True)
         )
+        if self.order_stitches:
+            stitch_order_key = functools.partial(stitching_key_func, pattern.panel_classifier.classes)
+            stitches.sort(key=stitch_order_key)
+            print(f"Sorted the stitches: {stitches}")
+
         stitches = (
             self.assign_tags_to_stitches(stitches)
             if self.encode_stitches_as_tags

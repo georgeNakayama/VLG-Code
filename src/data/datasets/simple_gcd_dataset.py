@@ -49,17 +49,13 @@ class SimpleGarmentCodeData(torch.utils.data.Dataset):
         self.sampling_rate = sampling_rate
         assert len(self.sampling_rate) == len(SampleType)
 
-        self.panel_classification = panel_classification
-
         self.datapoints_names = []
-        self.panel_classes = []
 
         split_file = Path(split_file)
         assert split_file.exists()
         self.datapoints_names = json.load(open(split_file, "r"))[split]
 
         self.panel_classifier = PanelClasses(classes_file=panel_classification)
-        self.panel_classes = self.panel_classifier.classes
 
         self.split = split
 
