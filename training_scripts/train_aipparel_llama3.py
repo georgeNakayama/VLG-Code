@@ -156,10 +156,12 @@ def get_deepspeed_config(cfg: MainConfig) -> dict:
             "total_num_steps": cfg.num_steps,
             "warmup_min_lr": 0,
             "warmup_max_lr": cfg.optimizer.lr,
-            "warmup_num_steps": cfg.warmup_steps,
-            "warmup_type": "linear",
         },
     }
+    if cfg.warmup_steps > 0:
+            scheduler_config["params"]["warmup_num_steps"] = cfg.warmup_steps,
+            scheduler_config["params"]["warmup_type"] = "linear"
+
     ds_config = {
         "train_micro_batch_size_per_gpu": cfg.batch_size,
         "gradient_accumulation_steps": cfg.grad_accumulation_steps,
