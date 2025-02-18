@@ -28,11 +28,12 @@ from transformers import MllamaForConditionalGeneration, MllamaConfig
 from .encodings import SinusoidalEncoding
 
 
-def _make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0):
+def _make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0, layer_norm=True):
     """Very simple multi-layer perceptron (also called FFN)"""
     h = [input_dim] + [hidden_dim] * (num_layers - 1)
     layers = []
-    layers.append(nn.LayerNorm(input_dim))
+    if layer_norm:
+        layers.append(nn.LayerNorm(input_dim))
     for i in range(num_layers - 1):
         layers.append(nn.Linear(h[i], h[i + 1]))
         layers.append(nn.LeakyReLU())
@@ -93,6 +94,8 @@ class AIpparelMllamaNextConfig(MllamaConfig):
         num_regression_layers: int = 2,
         discretize_params=False,
         detach_regression=False,
+        use_layer_norm=True,
+        regression_loss_from=100,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -127,8 +130,8 @@ class AIpparelMllamaNextConfig(MllamaConfig):
         self.bin_num = 128
         self.verts_bounds = [-4, -4, 4, 4]
         self.transf_bounds = [-4, -4, -4, -1, -1, -1, -1, 4, 4, 4, 1, 1, 1, 1]
-        self.regression_loss_from = 200
-        self.regression_loss_warmup_steps = 100
+        self.regression_loss_from = regression_loss_from
+        self.use_layer_norm = use_layer_norm
 
     def get_all_edge_indices(self, ret_dict=True):
         if ret_dict:
@@ -221,6 +224,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             self.config.text_config.hidden_size,
             7 + 8,
             self.config.num_regression_layers,
+            layer_norm=self.config.use_layer_norm,
         )
 
         self.vertex_encoding = SinusoidalEncoding(
@@ -587,11 +591,10 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                     edge_loss += loss
                     edge_type_losses[f"{edge_type}_loss"] = loss.mean()
 
-                if train_step > self.config.regression_loss_from and train_step < self.config.regression_loss_from + self.config.regression_loss_warmup_steps:
-                    weight = 1/self.config.regression_loss_warmup_steps * (train_step - self.config.regression_loss_from)
+                if train_step > self.config.regression_loss_from:
+                    total_loss = self.config.edge_loss_weight * edge_loss
                 else:
-                    weight = 1
-                total_loss = weight * self.config.edge_loss_weight * edge_loss
+                    total_loss = 0
             else:
                 total_loss = 0
 

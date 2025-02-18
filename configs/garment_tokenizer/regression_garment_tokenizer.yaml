@@ -7,3 +7,4 @@ sf_only: False
 include_template_name: False
 random_tag: True
 num_tags: 108
+order_stitches: True

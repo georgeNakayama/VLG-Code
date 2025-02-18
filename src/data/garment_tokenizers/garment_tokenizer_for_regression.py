@@ -127,7 +127,6 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
         if self.order_stitches:
             stitch_order_key = functools.partial(stitching_key_func, pattern.panel_classifier.classes)
             stitches.sort(key=stitch_order_key)
-            print(f"Sorted the stitches: {stitches}")
 
         stitches = (
             self.assign_tags_to_stitches(stitches)

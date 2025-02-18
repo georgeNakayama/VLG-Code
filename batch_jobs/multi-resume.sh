@@ -43,6 +43,10 @@ export PYTHONPATH=$WORKDIR:$WORKDIR/src
 
 cd $WORKDIR
 
+# TODO(george): Fill this in.
+export RESUME_DIR=""
+export RUN_ID=""
+
 # Run torch distributed training
 srun bash -c 'torchrun \
     --nnodes=$NNODES \
@@ -52,6 +56,8 @@ srun bash -c 'torchrun \
     --master_port=$MASTER_PORT \
     training_scripts/train_aipparel_llama3.py \
     --config-name train_v2 \
+    resume=$RESUME_DIR \
     run_name="full-train" \
+    run_id=$RUN_ID \
     project="vlg-train"'
 

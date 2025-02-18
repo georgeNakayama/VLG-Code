@@ -1,0 +1,4 @@
+scale: [360, 230, 360]
+shift: [0, -30 , 0]
+
+# First and last normalized to [-1, 1], second to [0, 1]

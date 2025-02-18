@@ -1,0 +1,4 @@
+scale: [256, 256]
+shift: [-103, -103]
+
+# normalization to [0, 1]
