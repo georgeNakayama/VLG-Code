@@ -4,9 +4,9 @@ import logging
 log = logging.getLogger(__name__)
 from typing import Union, Any
 
-from scipy.spatial.transform import Rotation as R
 import torch, numpy as np
 from transformers import PreTrainedTokenizer
+from scipy.spatial.transform import Rotation
 
 from data.patterns.gcd_pattern.pattern_converter import (
     NNSewingPattern as GCD_NNSewingPattern,
@@ -17,7 +17,6 @@ from data.garment_tokenizers.utils import (
     panel_universal_transtation,
     is_colinear,
 )
-from scipy.spatial.transform import Rotation
 from data.datasets.utils import IMAGE_TOKEN_INDEX
 from data.patterns.sf_pattern.pattern_converter import (
     NNSewingPattern as SF_SewingPattern,
@@ -393,7 +392,7 @@ class GarmentTokenizerForRegression(GarmentTokenizer):
                     rot_params = rot_params * np.array(
                         self.gt_stats.rotations.scale
                     ) + np.array(self.gt_stats.rotations.shift)
-                    rot_euler = R.from_quat(rot_params).as_euler("xyz", degrees=True)
+                    rot_euler = Rotation.from_quat(rot_params).as_euler("xyz", degrees=True)
                     panel_dict["rotation"] = rot_euler.tolist()
                     panel_dict["translation"] = transl_params.tolist()
                     continue

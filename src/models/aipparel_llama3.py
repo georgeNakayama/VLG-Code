@@ -28,7 +28,7 @@ from transformers import MllamaForConditionalGeneration, MllamaConfig
 from .encodings import SinusoidalEncoding
 
 
-def make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0):
+def _make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0):
     """Very simple multi-layer perceptron (also called FFN)"""
     h = [input_dim] + [hidden_dim] * (num_layers - 1)
     layers = []
@@ -40,7 +40,17 @@ def make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0):
     layers.append(nn.Dropout(dropout))
     return nn.Sequential(*layers)
 
+def _discretize(x, bounds, dim):
+    min_bounds = torch.tensor(bounds[:dim]).cuda()
+    max_bounds = torch.tensor(bounds[dim:]).cuda()
+    x = torch.minimum(max_bounds.cuda(), x)
+    x = torch.maximum(min_bounds.cuda(), x)
+    x = (x - min_bounds) / (max_bounds - min_bounds)
+    x = torch.round(x * 256) / 256
+    x = x * (max_bounds - min_bounds) + min_bounds
+    return x
 
+# Copied from transformers.models.mllama.modeling_mllama
 def _prepare_cross_attention_mask(
     cross_attention_mask: torch.Tensor,
     num_vision_tokens: int,
@@ -73,92 +83,50 @@ def _prepare_cross_attention_mask(
     return cross_attention_mask, full_text_row_masked_out_mask
 
 
-def _discretize(x, bounds, dim):
-    min_bounds = torch.tensor(bounds[:dim]).cuda()
-    max_bounds = torch.tensor(bounds[dim:]).cuda()
-    x = torch.minimum(max_bounds.cuda(), x)
-    x = torch.maximum(min_bounds.cuda(), x)
-    x = (x - min_bounds) / (max_bounds - min_bounds)
-    x = torch.round(x * 256) / 256
-    x = x * (max_bounds - min_bounds) + min_bounds
-    return x
-
-
 class AIpparelMllamaNextConfig(MllamaConfig):
     model_type = "aipparel_llama3"
 
     def __init__(
         self,
-        transf_token="<transformation>",
-        transf_token_index=32001,
-        line_token="<line>",
-        line_token_index=32002,
-        quadratic_token="<quadratic>",
-        quadratic_token_index=32003,
-        cubic_token="cubic",
-        cubic_token_index=32004,
-        arc_token="<arc>",
-        arc_token_index=32005,
-        cline_token="<closure_line>",
-        cline_token_index=32006,
-        cquadratic_token="<closure_quadratic>",
-        cquadratic_token_index=32007,
-        ccubic_token="<closure_cubic>",
-        ccubic_token_index=32008,
-        carc_token="<closure_arc>",
-        carc_token_index=32009,
-        pattern_start_token_index=32010,
-        pattern_end_token_index=32011,
-        panel_start_token_index=32012,
-        panel_end_token_index=32013,
+        num_freq: int = 0,
         edge_loss_weight: float = 1.0,
-        num_freq: int = 9,
         num_regression_layers: int = 2,
-        zero_tensor: torch.Tensor = None,
         discretize_params=False,
         detach_regression=False,
         **kwargs,
     ):
-
         super().__init__(**kwargs)
 
-        self.edge_loss_weight = edge_loss_weight
+        self.transf_token = None
+        self.transf_token_index = None
+        self.line_token = None
+        self.line_token_index = None
+        self.quadratic_token = None
+        self.quadratic_token_index = None
+        self.cubic_token = None
+        self.cubic_token_index = None
+        self.arc_token = None
+        self.arc_token_index = None
+        self.cline_token = None
+        self.cline_token_index = None
+        self.cquadratic_token = None
+        self.cquadratic_token_index = None
+        self.ccubic_token = None
+        self.ccubic_token_index = None
+        self.carc_token = None
+        self.carc_token_index = None
+
+        self.zero_tensor = None
+
         self.num_freq = num_freq
+        self.edge_loss_weight = edge_loss_weight
         self.num_regression_layers = num_regression_layers
-
-        self.pattern_start_token_index = pattern_start_token_index
-        self.pattern_end_token_index = pattern_end_token_index
-        self.panel_start_token_index = panel_start_token_index
-        self.panel_end_token_index = panel_end_token_index
-
-        self.transf_token = transf_token
-        self.transf_token_index = transf_token_index
-        self.line_token = line_token
-        self.line_token_index = line_token_index
-        self.quadratic_token = quadratic_token
-        self.quadratic_token_index = quadratic_token_index
-        self.cubic_token = cubic_token
-        self.cubic_token_index = cubic_token_index
-        self.arc_token = arc_token
-        self.arc_token_index = arc_token_index
-        self.cline_token = cline_token
-        self.cline_token_index = cline_token_index
-        self.cquadratic_token = cquadratic_token
-        self.cquadratic_token_index = cquadratic_token_index
-        self.ccubic_token = ccubic_token
-        self.ccubic_token_index = ccubic_token_index
-        self.carc_token = carc_token
-        self.carc_token_index = carc_token_index
-
-        self.zero_tensor = zero_tensor
+        self.discretize_params = discretize_params
+        self.detach_regression = detach_regression
 
         self.bin_num = 128
         self.verts_bounds = [-4, -4, 4, 4]
         self.transf_bounds = [-4, -4, -4, -1, -1, -1, -1, 4, 4, 4, 1, 1, 1, 1]
-
-        self.discretize_params = discretize_params
-        self.detach_regression = detach_regression
-
         self.regression_loss_from = 200
         self.regression_loss_warmup_steps = 100
 
@@ -248,7 +216,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
 
     def initialize_panel_edge_modules(self):
 
-        self.regression_head = make_mlp(
+        self.regression_head = _make_mlp(
             self.config.text_config.hidden_size,
             self.config.text_config.hidden_size,
             7 + 8,
@@ -480,52 +448,49 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
         if input_ids is not None:
-            transf_mask = (
-                input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
-            )
+            transf_mask = input_ids == self.config.transf_token_index
             edge_mask = torch.isin(
                 input_ids,
                 torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(
                     input_ids
                 ),
             )
-            if (
-                edge_mask is not None
-                and pattern_endpoints is not None
-                and pattern_endpoint_masks is not None
-            ):
-                assert (
-                    edge_mask.sum() == pattern_endpoint_masks.sum()
-                ), "edge mask has shape {} but endpoints mask has shape {}".format(
-                    edge_mask.sum(), pattern_endpoint_masks.sum()
+        if (
+            edge_mask is not None
+            and pattern_endpoints is not None
+            and pattern_endpoint_masks is not None
+        ):
+            assert (
+                edge_mask.sum() == pattern_endpoint_masks.sum()
+            ), "edge mask has shape {} but endpoints mask has shape {}".format(
+                edge_mask.sum(), pattern_endpoint_masks.sum()
+            )
+            _endpoints = pattern_endpoints[pattern_endpoint_masks]
+            if self.config.discretize_params:
+                _endpoints = _discretize(_endpoints, self.config.verts_bounds, 2)
+            edge_embeds = self.vertex_proj(self.vertex_encoding(_endpoints))
+            inputs_embeds[edge_mask] = inputs_embeds[edge_mask] + edge_embeds
+        if (
+            transf_mask is not None
+            and pattern_transfs is not None
+            and pattern_transf_masks is not None
+        ):
+            assert transf_mask.sum() == pattern_transf_masks.sum()
+            _transformations = pattern_transfs[pattern_transf_masks]
+            if self.config.discretize_params:
+                _transformations = _discretize(
+                    _transformations, self.config.transf_bounds, 7
                 )
-                _endpoints = pattern_endpoints[pattern_endpoint_masks]
-                if self.config.discretize_params:
-                    _endpoints = _discretize(_endpoints, self.config.verts_bounds, 2)
-                edge_embeds = self.vertex_proj(self.vertex_encoding(_endpoints))
-                inputs_embeds[edge_mask] = inputs_embeds[edge_mask] + edge_embeds
-
-            if (
-                transf_mask is not None
-                and pattern_transfs is not None
-                and pattern_transf_masks is not None
-            ):
-                assert transf_mask.sum() == pattern_transf_masks.sum()
-                _transformations = pattern_transfs[pattern_transf_masks]
-                if self.config.discretize_params:
-                    _transformations = _discretize(
-                        _transformations, self.config.transf_bounds, 7
-                    )
-                transf_embeds = self.transf_proj(
-                    torch.cat(
-                        [
-                            self.trasl_encoding(_transformations[:, :3]),
-                            _transformations[:, 3:],
-                        ],
-                        dim=1,
-                    )
+            transf_embeds = self.transf_proj(
+                torch.cat(
+                    [
+                        self.trasl_encoding(_transformations[:, :3]),
+                        _transformations[:, 3:],
+                    ],
+                    dim=1,
                 )
-                inputs_embeds[transf_mask] = inputs_embeds[transf_mask] + transf_embeds
+            )
+            inputs_embeds[transf_mask] = inputs_embeds[transf_mask] + transf_embeds
 
         outputs = self.language_model(
             attention_mask=attention_mask,
@@ -548,6 +513,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         total_loss = None
         edge_type_losses = {}
         edge_loss = None
+
         if labels is not None:
             # ce loss
             # Shift so that tokens < n predict n
@@ -691,10 +657,8 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
 
         # if ddp_rank == 0:
         #     import ipdb; ipdb.set_trace()
+
         if last_hidden_state is not None:
-            pattern_transf_masks = (
-                input_ids == self.config.get_all_edge_indices(ret_dict=False)[0]
-            )
             pattern_endpoint_masks = torch.isin(
                 input_ids,
                 torch.tensor(self.config.get_all_edge_indices(ret_dict=False)[1:]).to(
@@ -767,6 +731,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                             [param_dict[ind], panel_params], dim=0
                         )
 
+            pattern_transf_masks = input_ids == self.config.transf_token_index 
             if pattern_transf_masks.any():
                 assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_transfs = torch.zeros(
@@ -783,12 +748,12 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                 )[:, :7]
                 transformations_mask[pattern_transf_masks] = True
 
-                ind = self.config.get_all_edge_indices(ret_dict=False)[0]
-                if not ind in param_dict:
-                    param_dict[ind] = pattern_transfs.reshape(-1, 7)
+                transf_ind = self.config.transf_token_index
+                if not transf_ind in param_dict:
+                    param_dict[transf_ind] = pattern_transfs.reshape(-1, 7)
                 else:
-                    param_dict[ind] = torch.cat(
-                        [param_dict[ind], pattern_transfs.reshape(-1, 7)], dim=0
+                    param_dict[transf_ind] = torch.cat(
+                        [param_dict[transf_ind], pattern_transfs.reshape(-1, 7)], dim=0
                     )
 
         # TODO: we have no attention_mask so this won't work, check if we really won't need attention mask and find another way
@@ -814,6 +779,8 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
 
         if num_logits_to_keep is not None:
             model_inputs["num_logits_to_keep"] = num_logits_to_keep
+        
+        param_dict["pattern_endp"].append(pattern_endpoints)
 
         model_inputs.update(
             {

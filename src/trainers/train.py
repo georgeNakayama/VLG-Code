@@ -5,15 +5,20 @@ import os
 import time
 
 import torch
-import torch.distributed as dist
 import wandb as wb
 
-from trainers.utils import dict_to_cuda, start_experiment, AverageMeter, ProgressMeter
+from trainers.utils import (
+    dict_to_cuda,
+    dict_to_dtype,
+    start_experiment,
+    AverageMeter,
+    ProgressMeter,
+)
 
 
 def train(
     cfg,
-    model: torch.nn.Module,
+    model,
     loader,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     garment_tokenizer,
@@ -58,14 +63,6 @@ def _fit_loop(
     start_step: int,
     save_freq: int,
 ) -> None:
-
-    mode_names = loader.dataset.get_mode_names()
-    cast_dtype = (
-        torch.half
-        if precision == "fp16"
-        else (torch.bfloat16 if precision == "bf16" else torch.float32)
-    )
-
     ##################################################
     #                  Meters Setup                  #
     ##################################################
@@ -75,6 +72,7 @@ def _fit_loop(
     ce_loss_meter = AverageMeter("CE Loss", ":.4f")
     edge_loss_meter = AverageMeter("Edge Loss", ":.4f")
 
+    mode_names = loader.dataset.get_mode_names()
     modewise_total_loss_meters = [
         AverageMeter(f"{mode} Total Loss", ":.4f") for mode in mode_names
     ]
@@ -120,15 +118,21 @@ def _fit_loop(
     #                 Model Training                 #
     ##################################################
     model.train()
+    model.module.initialize_weights_for_panel_modules(start_step)
+
     if ddp_rank == 0:
         log.info("Start Training...")
+
+    cast_dtype = (
+        torch.half
+        if precision == "fp16"
+        else (torch.bfloat16 if precision == "bf16" else torch.float32)
+    )
 
     train_sampler: torch.utils.data.DistributedSampler = loader.data_sampler
     current_epoch = 0
     train_sampler.set_epoch(current_epoch)
     loader_iter = iter(loader)
-
-    model.module.initialize_weights_for_panel_modules(start_step)
 
     for step in range(start_step, num_steps):
         for i in range(grad_accumulation_steps):
@@ -145,16 +149,17 @@ def _fit_loop(
             data_time_meter.update(time.time() - start_time)
 
             input_dict = dict_to_cuda(input_dict)
-            input_dict["pixel_values"] = input_dict["pixel_values"].to(cast_dtype)
-            batch_size = input_dict["pixel_values"].size(0)
-            for k in input_dict["pattern_params"].keys():
-                input_dict["pattern_params"][k] = input_dict["pattern_params"][k].to(
-                    cast_dtype
-                )
-            input_dict["pattern_endpoints"] = input_dict["pattern_endpoints"].to(
-                cast_dtype
+            input_dict = dict_to_dtype(
+                input_dict,
+                cast_dtype,
+                [
+                    "pixel_values",
+                    "pattern_params",
+                    "pattern_endpoints",
+                    "pattern_transfs",
+                ],
             )
-            input_dict["pattern_transfs"] = input_dict["pattern_transfs"].to(cast_dtype)
+            batch_size = input_dict["pixel_values"].size(0)
 
             output = model(
                 input_ids=input_dict["input_ids"],
@@ -177,6 +182,7 @@ def _fit_loop(
             loss = output.loss
             model.backward(loss.mean())
             model.step()
+
             ce_loss = output.ce_loss
             edge_loss = output.edge_loss
 

@@ -2,6 +2,7 @@ from enum import Enum
 import logging
 
 log = logging.getLogger(__name__)
+import pathlib
 import os
 
 import numpy as np
@@ -43,8 +44,12 @@ def dict_to_cpu(input_dict):
     return input_dict
 
 
-def dict_to_dtype(input_dict, dtype=torch.float32):
+def dict_to_dtype(input_dict, dtype=torch.float32, target_keys=None):
     for k, v in input_dict.items():
+        if target_keys is not None:
+            if k not in target_keys:
+                continue
+
         if isinstance(input_dict[k], torch.Tensor):
             input_dict[k] = v.to(dtype=dtype)
         elif (
@@ -163,15 +168,16 @@ class AverageMeter(object):
 
 def start_experiment(
     cfg,
-    model: torch.nn.Module,
+    model,
     ddp_rank: int,
     ddp_world_size: int,
-    resume: os.PathLike,
-    from_start: bool,
+    resume: pathlib.Path | str | None,
+    from_start: bool = True,
 ):
     # resume deepspeed checkpoint
     os.environ["WANDB_DIR"] = cfg.wandb_info.wandb_dir
     os.environ["WANDB_CACHE_DIR"] = cfg.wandb_info.wandb_cache_dir
+
     if ddp_rank == 0:
         config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
         wb.init(
@@ -184,19 +190,22 @@ def start_experiment(
         )
 
     start_step = 0
-    if resume:
-        latest_path = os.path.join(resume, "latest")
-        if os.path.isfile(latest_path):
-            with open(latest_path, "r") as fd:
-                tag = fd.read().strip()
-        else:
-            raise ValueError(f"Unable to find 'latest' file at {latest_path}")
 
-        ds_checkpoint_dir = os.path.join(resume, tag)
-        if from_start or (
-            os.path.isdir(ds_checkpoint_dir)
-            and len(os.listdir(ds_checkpoint_dir)) != ddp_world_size + 1
-        ):
+    if resume is not None:
+        resume = pathlib.Path(resume)
+        latest_path = resume / "latest"
+        if not latest_path.exists():
+            raise ValueError(f"Unable to find 'latest' file at {latest_path}")
+        with open(latest_path, "r") as fd:
+            tag = fd.read().strip()
+
+        ds_checkpoint_dir = resume / tag
+        ds_checkpoint_mismatch = ds_checkpoint_dir.exists() and len(os.listdir(ds_checkpoint_dir)) != ddp_world_size + 1
+
+        if from_start or ds_checkpoint_mismatch:
+            if ddp_rank == 0 and not from_start:
+                log.warn("Resuming from checkpoint but number of GPUs is mismatched!")
+
             state_dict = _get_fp32_state_dict_from_zero_checkpoint(
                 ds_checkpoint_dir, True
             )
@@ -204,13 +213,14 @@ def start_experiment(
         else:
             _, _ = model.load_checkpoint(resume)
 
-        with open(os.path.join(resume, "latest"), "r") as f:
+        with open(latest_path, "r") as f:
             ckpt_dir = f.readlines()[0].strip()
         if not from_start:
             start_step = int(ckpt_dir.replace("global_step", ""))
+
         if ddp_rank == 0:
             log.info(
-                "resume training from {}, start from epoch {}".format(
+                "Resume training from {}, start from epoch {}".format(
                     resume, start_step
                 )
             )

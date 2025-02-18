@@ -13,30 +13,6 @@ DEFAULT_PLACEHOLDER_TOKEN = "<placeholder>"
 LLAMA_EOT_INDEX = 128009
 LLAMA_IMAGE_INDEX = 128256
 
-# HMR_SHORT_QUESTION_LIST = [
-#     "Can you give the SMPL pose of this person?",
-#     "Please output this person's SMPL pose.",
-#     "Describe what this perosn is doing using SMPL pose.",
-#     "What's the SMPL pose of this person?",
-#     "Use SMPL to describe this person's pose."
-# ]
-
-HMR_SHORT_QUESTION_LIST = [
-    "I have a description of a person's pose, can you give the SMPL pose of this person?",
-    "Give you a word descrption of a human, please output the SMPL pose.",
-    "Describe what this perosn is doing using SMPL pose.",
-    "What's the SMPL pose of this person?",
-    "Use SMPL pose to describe this person's behavior.",
-]
-
-# TEXT_SHORT_QUESTION_LIST = [
-#     "Can you give the SMPL pose?",
-#     "Please output this person's SMPL pose.",
-#     "Give the SMPL pose.",
-#     "What's the SMPL pose of it?",
-#     "Use SMPL to describe the pose."
-# ]
-
 DESCRIPTIVE_TEXT_SHORT_QUESTION_LIST = [
     "I have a word description of a piece of garment, can you provide the sewing pattern? {sent}",
     "There is a garment like this: {sent} Please output this sewing pattern.",
