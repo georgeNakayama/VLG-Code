@@ -23,7 +23,7 @@ from .utils import (
 class SampleType(enum.Enum):
     IMAGE = 0
     TEXT = 1
-    BOTH = 3
+    BOTH = 2
 
     def __int__(self):
         return self.value
