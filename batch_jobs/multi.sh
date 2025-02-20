@@ -8,8 +8,9 @@
 #SBATCH --partition=preempt             # Partition
 #SBATCH -A marlowe-m000051              # Account
 #SBATCH --job-name=train-multi
-#SBATCH --output=train-multi.out
-#SBATCH --error=train-multi.err
+#SBATCH --output=train-multi-%x.%j.out
+#SBATCH --error=train-multi-%x.%j.err
+
 
 # Load environment
 source /scratch/m000051/miniforge3/bin/activate
@@ -52,6 +53,7 @@ srun bash -c 'torchrun \
     --master_port=$MASTER_PORT \
     training_scripts/train_aipparel_llama3.py \
     --config-name train_v2 \
-    run_name="full-train" \
+    grad_accumulation_steps=5 \
+    run_name="full-train-4nodes" \
     project="vlg-train"'
 

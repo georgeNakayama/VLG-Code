@@ -59,7 +59,7 @@ def dict_to_dtype(input_dict, dtype=torch.float32, target_keys=None):
         ):
             input_dict[k] = [ele.to(dtype=dtype) for ele in v]
         elif isinstance(input_dict[k], dict):
-            input_dict[k] = dict_to_dtype(input_dict[k])
+            input_dict[k] = dict_to_dtype(input_dict[k], dtype)
     return input_dict
 
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=64
@@ -23,12 +23,11 @@ export NNODES=1
 # Number of GPUs per node
 export GPUS_PER_NODE=8
 
-source /scratch/m000051/miniforge3/bin/activate
 mamba activate llama
 
 cd $WORKDIR
 
-PYTHONPATH=$WORKDIR/src torchrun --nnodes=$NNODES --nproc_per_node=$GPUS_PER_NODE training_scripts/train_aipparel_llama3.py \
-    --config-name train_aipparel_llama3.2_11b \
-    warmup_steps=0 \
-    run_name=train-lr1e-6-bs4
+PYTHONPATH=$WORKDIR:$WORKDIR/src torchrun --nnodes=$NNODES --nproc_per_node=$GPUS_PER_NODE training_scripts/train_aipparel_llama3.py \
+    --config-name train_v2 \
+    run_name="single-sbatch" \
+    project="vlg-train"

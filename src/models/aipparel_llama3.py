@@ -783,8 +783,6 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
         if num_logits_to_keep is not None:
             model_inputs["num_logits_to_keep"] = num_logits_to_keep
         
-        param_dict["pattern_endp"].append(pattern_endpoints)
-
         model_inputs.update(
             {
                 "position_ids": position_ids,

@@ -5,6 +5,6 @@ _target_: data.garment_tokenizers.garment_tokenizer_for_regression.GarmentTokeni
 encode_stitches_as_tags: True
 sf_only: False
 include_template_name: False
-random_tag: True
+random_tag: False
 num_tags: 108
 order_stitches: True
