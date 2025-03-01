@@ -1,10 +1,10 @@
 import json
+import os
 from pathlib import Path
 import random
 import tempfile
 
 import cv2
-import pyarrow.dataset as ds
 import torch
 
 from data.patterns.gcd_pattern.pattern_converter import NNSewingPattern
@@ -16,26 +16,21 @@ class VLGBenchmark(torch.utils.data.Dataset):
     def __init__(
         self,
         data_path: Path | str,
-        images_root: Path | str,
         panel_classification: str | None = None,
+        split = None,
     ):
 
         data_path = Path(data_path)
-        self.images_root = Path(images_root)
         assert data_path.exists()
-        assert self.images_root.exists()
 
-        self.dataset = ds.dataset(data_path, format="parquet")
-        required_keys = ["idx", "image_path", "pattern", "prompt"]
-
-        assert all((key in self.dataset.keys() for key in required_keys))
+        self.data_points = [data_path / f for f in os.listdir(data_path) if os.path.isdir(data_path / f)]
 
         self.panel_classifier = PanelClasses(classes_file=panel_classification)
 
 
     def __len__(self):
         """Number of entries in the dataset"""
-        return len(self.dataset)
+        return len(self.data_points)
 
     def _prepare_image(self, image_path: str | Path):
         """Fetch the image for the given index"""
@@ -67,20 +62,32 @@ class VLGBenchmark(torch.utils.data.Dataset):
         if torch.is_tensor(idx):  # allow indexing by tensors
             idx = idx.tolist()
 
-        data_point = self.dataset.iloc[idx]
+        data_point_root = self.data_points[idx]
+        input_spec_file = data_point_root / "input.json"
+        assert input_spec_file.exists()
+        input_spec = json.load(open(input_spec_file, "r"))
+
 
         # Get the rand_id
-        image_path = self.images_root / data_point["image_path"]
-        gt_pattern = self._get_sewing_pattern(data_point["pattern"], data_point["idx"])
+        gt_pattern = NNSewingPattern(
+                data_point_root / input_spec["pattern"],
+                panel_classifier=self.panel_classifier,
+                template_name=input_spec["idx"],
+            )
+        gt_pattern.name = input_spec["idx"]
 
+        if input_spec["image_path"]:
+            image_path = data_point_root / input_spec["image_path"]
+        else:
+            image_path = None
 
-        if image_path.exists():
+        if image_path and image_path.exists():
             image, image_path = self._prepare_image(image_path)
         else:
             image = torch.zeros((3, 800, 800))
             image_path = ""
 
-        question = [{"type": "image"}, {"type": "text", "text": data_point["prompt"]}]
+        question = [{"type": "image"}, {"type": "text", "text": input_spec["prompt"]}]
         
         answer_template = random.choice(ANSWER_LIST).format(
             pattern=DEFAULT_PLACEHOLDER_TOKEN

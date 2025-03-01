@@ -1,0 +1,4 @@
+_target_: data.datasets.benchmark.VLGBenchmark
+
+data_path: /scratch/m000051/garment_gang/data/benchmark
+panel_classification: assets/panel_classes_garmentcodedata.json

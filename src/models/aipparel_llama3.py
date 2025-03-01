@@ -28,7 +28,9 @@ from transformers import MllamaForConditionalGeneration, MllamaConfig
 from .encodings import SinusoidalEncoding
 
 
-def _make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0, layer_norm=True):
+def _make_mlp(
+    input_dim, hidden_dim, output_dim, num_layers, dropout=0, layer_norm=True
+):
     """Very simple multi-layer perceptron (also called FFN)"""
     h = [input_dim] + [hidden_dim] * (num_layers - 1)
     layers = []
@@ -41,6 +43,7 @@ def _make_mlp(input_dim, hidden_dim, output_dim, num_layers, dropout=0, layer_no
     layers.append(nn.Dropout(dropout))
     return nn.Sequential(*layers)
 
+
 def _discretize(x, bounds, dim):
     min_bounds = torch.tensor(bounds[:dim]).cuda()
     max_bounds = torch.tensor(bounds[dim:]).cuda()
@@ -50,6 +53,7 @@ def _discretize(x, bounds, dim):
     x = torch.round(x * 256) / 256
     x = x * (max_bounds - min_bounds) + min_bounds
     return x
+
 
 # Copied from transformers.models.mllama.modeling_mllama
 def _prepare_cross_attention_mask(
@@ -539,7 +543,10 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
             # Regression loss
             last_hidden_state = outputs.hidden_states[-1]
             param_preds = {k: torch.zeros_like(v) for k, v in pattern_params.items()}
-            if pattern_params_mask is not None and train_step > self.config.regression_loss_from:
+            if (
+                pattern_params_mask is not None
+                and train_step > self.config.regression_loss_from
+            ):
                 edge_loss = 0
                 for edge_type, ind in self.config.get_all_edge_indices(
                     ret_dict=True
@@ -734,7 +741,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
                             [param_dict[ind], panel_params], dim=0
                         )
 
-            pattern_transf_masks = input_ids == self.config.transf_token_index 
+            pattern_transf_masks = input_ids == self.config.transf_token_index
             if pattern_transf_masks.any():
                 assert pattern_transf_masks.shape[1] == last_hidden_state.shape[1]
                 pattern_transfs = torch.zeros(
@@ -782,7 +789,7 @@ class AIpparelMllavaNextForConditionalGeneration(MllamaForConditionalGeneration)
 
         if num_logits_to_keep is not None:
             model_inputs["num_logits_to_keep"] = num_logits_to_keep
-        
+
         model_inputs.update(
             {
                 "position_ids": position_ids,

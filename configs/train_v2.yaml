@@ -11,12 +11,12 @@ model:
   edge_loss_weight: 0.1
   num_freq: 0
   num_regression_layers: 2
-  regression_loss_from: 200
+  regression_loss_from: 0
   discretize_params: True
   use_layer_norm: True
 
 optimizer: 
-  lr: 3e-5
+  lr: 6e-5
   beta1: .9
   beta2: 0.99
 
@@ -42,14 +42,14 @@ from_start: False
 resume: null
 
 tune_adaptor: False
-grad_accumulation_steps: 3
-num_steps: 5000
-save_freq: 200
+grad_accumulation_steps: 10
+num_steps: 15000
+save_freq: 500
 batch_size: 6
 warmup_steps: 0
 
-# Effective batch-size = 8 * 8 * 6 * 3 = 1152
+# Effective batch-size = 1 * 8 * 6 * 10 = 480 
 
 hydra:
   run:
-    dir: /scratch/m000051/garment_gang/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: /scratch/m000051/garment_gang/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M}

@@ -1,0 +1,55 @@
+# Training configuration for Pattern Shape prediction model 
+# (part I of NeuralTailor)
+
+# 0.5 * stitch cls loss (focal loss) + 0.005 * stitch ce loss + 5 * panel loss
+defaults: 
+  - dataset: benchmark_dataset 
+  - garment_tokenizer: regression_garment_tokenizer
+  - _self_
+
+model:
+  edge_loss_weight: 0.1
+  num_freq: 0
+  num_regression_layers: 2
+  regression_loss_from: 0
+  discretize_params: True
+  use_layer_norm: True
+
+optimizer: 
+  lr: 6e-5
+  beta1: .9
+  beta2: 0.99
+
+wandb_info:
+  wandb_dir: /scratch/m000051/garment_gang
+  wandb_cache_dir: /scratch/m000051/garment_gang/cache
+
+
+project: vlg
+run_name: train_v2
+run_id: null
+run_local_path: null
+
+
+version: meta-llama/Llama-3.2-11B-Vision-Instruct
+precision: bf16
+eval_only: False
+gen_only: False
+gen_split: train
+
+# training
+from_start: False
+resume: null
+
+tune_adaptor: False
+grad_accumulation_steps: 10
+num_steps: 15000
+save_freq: 500
+batch_size: 6
+warmup_steps: 0
+
+# Effective batch-size = 1 * 8 * 6 * 10 = 480 
+
+hydra:
+  run:
+    dir: /scratch/m000051/garment_gang/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
