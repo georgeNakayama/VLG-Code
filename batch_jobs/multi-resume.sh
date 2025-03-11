@@ -8,8 +8,8 @@
 #SBATCH --partition=preempt             # Partition
 #SBATCH -A marlowe-m000051              # Account
 #SBATCH --job-name=train-multi
-#SBATCH --output=train-multi.out
-#SBATCH --error=train-multi.err
+#SBATCH --output=train-multi-%x.%j.out
+#SBATCH --error=train-multi-%x.%j.err
 
 # Load environment
 source /scratch/m000051/miniforge3/bin/activate
@@ -43,9 +43,14 @@ export PYTHONPATH=$WORKDIR:$WORKDIR/src
 
 cd $WORKDIR
 
+export BASE_DIR="/scratch/m000051/garment_gang/vlg-train/long-train-2-nodes/2025-02-22"
+mv $BASE_DIR/16-39-01/ckpt_9000/global_step9001/* $BASE_DIR/16-39-02/ckpt_9000/global_step9001/
+mv $BASE_DIR/16-39-03/ckpt_9000/global_step9001/* $BASE_DIR/16-39-02/ckpt_9000/global_step9001/
+
 # TODO(george): Fill this in.
-export RESUME_DIR=""
-export RUN_ID=""
+export RESUME_DIR="/scratch/m000051/garment_gang/vlg-train/long-train-2-nodes/2025-02-22/16-39-02/ckpt_9000"
+export RUN_ID="kg7c9746"
+export RUN_LOCAL_PATH="/scratch/m000051/garment_gang/wandb/run-20250221_020637-kg7c9746"
 
 # Run torch distributed training
 srun bash -c 'torchrun \
@@ -57,7 +62,9 @@ srun bash -c 'torchrun \
     training_scripts/train_aipparel_llama3.py \
     --config-name train_v2 \
     resume=$RESUME_DIR \
-    run_name="full-train" \
+    run_name="long-train-2-nodes" \
     run_id=$RUN_ID \
+    run_local_path=$RUN_LOCAL_PATH \
+    grad_accumulation_steps=5 \
     project="vlg-train"'
 

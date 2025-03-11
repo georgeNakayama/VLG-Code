@@ -7,6 +7,7 @@
 #SBATCH --time=12:00:00                 # Max time
 #SBATCH --partition=preempt             # Partition
 #SBATCH -A marlowe-m000051              # Account
+#SBATCH --exclude=n08,n07,n01,n04,n06
 #SBATCH --job-name=train-multi
 #SBATCH --output=train-multi-%x.%j.out
 #SBATCH --error=train-multi-%x.%j.err
@@ -53,7 +54,7 @@ srun bash -c 'torchrun \
     --master_port=$MASTER_PORT \
     training_scripts/train_aipparel_llama3.py \
     --config-name train_v2 \
+    run_name="long-train-2-nodes" \
     grad_accumulation_steps=5 \
-    run_name="full-train-4nodes" \
     project="vlg-train"'
 

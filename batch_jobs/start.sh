@@ -7,8 +7,8 @@
 #SBATCH --partition=preempt
 #SBATCH -A marlowe-m000051
 #SBATCH --job-name=resume
-#SBATCH --output=resume.out
-#SBATCH --error=resume.err
+#SBATCH --output=train-multi-%x.%j.out
+#SBATCH --error=train-multi-%x.%j.err
 
 export CUDA_HOME=/cm/shared/apps/nvhpc/24.7/Linux_x86_64/24.7/cuda/12.5
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
@@ -29,5 +29,5 @@ cd $WORKDIR
 
 PYTHONPATH=$WORKDIR:$WORKDIR/src torchrun --nnodes=$NNODES --nproc_per_node=$GPUS_PER_NODE training_scripts/train_aipparel_llama3.py \
     --config-name train_v2 \
-    run_name="single-sbatch" \
+    run_name="long-train-single-node" \
     project="vlg-train"
