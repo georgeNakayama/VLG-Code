@@ -28,6 +28,8 @@ PYTHONPATH=$WORKDIR:$WORKDIR/src torchrun --nnodes=1 --nproc_per_node=8 training
     dataset=vlg_dataset
 ```
 
+To resume or evaluate an existing checkpoint add the flag `+resume=<>` pointing to your checkpoint.
+
 ## Citation
 
 If you are using our model or dataset in your project, consider citing our paper.

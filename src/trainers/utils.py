@@ -192,6 +192,13 @@ def start_experiment(
     start_step = 0
 
     if resume is not None:
+        if os.path.isfile(resume):
+            # assume single torch checkpoint
+            state_dict = torch.load(resume)
+            model.load_state_dict(state_dict, strict=False)
+            return 0
+
+        # assume deepspeed checkpoint
         resume = pathlib.Path(resume)
         latest_path = resume / "latest"
         if not latest_path.exists():

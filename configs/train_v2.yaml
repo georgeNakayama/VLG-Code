@@ -21,8 +21,8 @@ optimizer:
   beta2: 0.99
 
 wandb_info:
-  wandb_dir: /scratch/m000051/garment_gang
-  wandb_cache_dir: /scratch/m000051/garment_gang/cache
+  wandb_dir: <>
+  wandb_cache_dir: <>
 
 
 project: vlg
@@ -52,4 +52,4 @@ warmup_steps: 0
 
 hydra:
   run:
-    dir: /scratch/m000051/garment_gang/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M}
+    dir: <>/${project}/${run_name}/${now:%Y-%m-%d}/${now:%H-%M}

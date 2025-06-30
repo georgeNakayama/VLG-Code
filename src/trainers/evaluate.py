@@ -34,6 +34,12 @@ def _start_experiment(
             dir=cfg.run_local_path,
         )
     if resume:
+        if os.path.isfile(resume):
+            # assume single torch checkpoint
+            state_dict = torch.load(resume)
+            model.load_state_dict(state_dict, strict=False)
+            return 0
+
         latest_path = os.path.join(resume, "latest")
         if os.path.isfile(latest_path):
             with open(latest_path, "r") as fd:
